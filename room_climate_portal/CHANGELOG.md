@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.0
+- Custom QR code per room: on the admin page, **Custom code** sets the room link to `<public_url>/camera/<your code>`
+  (4-64 letters, digits, - or _; unique; case-insensitive check). **New random code** goes back to a random one.
+
 ## 0.2.1
 - Admin page: Set PIN, PIN for all rooms, Remove PIN and New QR code now use an in-page dialog.
   Browser pop-ups are blocked inside the HA panel and the HA mobile app, so those buttons did nothing before.

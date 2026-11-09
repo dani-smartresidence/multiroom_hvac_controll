@@ -102,7 +102,14 @@ Import the blueprint `blueprints/automation/room_precondition.yaml` from this re
 automation per room (precondition sensor + thermostat). It fires at exactly the time the page shows,
 so page and heating never disagree.
 
-## 6. Print the QR codes
+## 6. Custom codes
+
+By default each room gets a random 22-character code. **Custom code** on the admin page lets you choose it,
+e.g. `sala-102` → `https://camera.voxdomini.ro/camera/sala-102`. Codes must be unique and use 4-64 letters,
+digits, `-` or `_`. A short or guessable code (like the room number) can be tried by anyone, so give such
+rooms a PIN. **New random code** replaces a custom code with a random one. Either change stops the old printed code.
+
+## 7. Print the QR codes
 
 Open **Room QR** in the HA sidebar. It lists every room with what was found (and what is missing),
 the live temperatures, the next event and its QR code. **Print all QR codes** gives an A4 sheet;

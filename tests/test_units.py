@@ -91,3 +91,21 @@ def test_normalize_base():
     assert normalize_base("camera/") == "/camera"
     assert normalize_base("") == ""
     assert normalize_base("/") == ""
+
+
+def test_custom_codes(tmp_path):
+    import pytest
+    from portal.tokens import CodeError
+
+    store = TokenStore(tmp_path / "t.json")
+    rooms = ["a", "b"]
+    assert store.set_custom("a", "camera204-x7k", rooms) == "camera204-x7k"
+    assert store.resolve("camera204-x7k", rooms) == "a"
+    assert TokenStore(tmp_path / "t.json").token_for("a") == "camera204-x7k"
+    for bad in ("abc", "has space", "api", "x" * 65, "ăbcd"):
+        with pytest.raises(CodeError):
+            store.set_custom("b", bad, rooms)
+    with pytest.raises(CodeError):
+        store.set_custom("b", "CAMERA204-X7K", rooms)  # same as room a, ignoring case
+    store.rotate("a")
+    assert store.resolve("camera204-x7k", rooms) is None and len(store.token_for("a")) == 22

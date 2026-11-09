@@ -62,7 +62,7 @@
   var SCHEDULE_DAYS = 7;
 
   var BASE = document.documentElement.getAttribute("data-base") || "";
-  var token = (location.pathname.slice(BASE.length).match(/^\/([A-Za-z0-9_-]{16,64})\/?$/) || [])[1] || "";
+  var token = (location.pathname.slice(BASE.length).match(/^\/([A-Za-z0-9_-]{4,64})\/?$/) || [])[1] || "";
   var api = BASE + "/api/" + token;
   var pinInfo = null;
   var room = null;

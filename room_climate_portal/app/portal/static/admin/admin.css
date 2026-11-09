@@ -34,3 +34,4 @@ code,.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12p
 .dlg input{width:100%;font:inherit;font-size:22px;letter-spacing:.4em;text-align:center;padding:10px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--ink)}
 .dlg-err{min-height:18px;margin:8px 0;color:var(--warn);font-weight:600;font-size:13px}
 .dlg-btns{display:flex;justify-content:flex-end;gap:8px}
+.dlg input.text{letter-spacing:normal;font-size:16px;text-align:left}

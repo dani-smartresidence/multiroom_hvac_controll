@@ -178,3 +178,19 @@ async def test_pin_lockout(env):
     assert r.status == 429
     r = await guest.post(f"/camera/api/{tok}/pin", json={"pin": "123456"})
     assert r.status == 429 and (await r.json())["retry_after"] > 0
+
+
+async def test_admin_custom_code(env):
+    _, portal, guest, admin = env
+    old = portal.tokens.token_for("camera_204")
+    r = await admin.post("/api/rooms/camera_204/code", json={"code": "c204"})
+    row = await r.json()
+    assert r.status == 200 and row["custom_code"] and row["url"].endswith("/camera/c204")
+    assert (await guest.get(f"/camera/api/{old}")).status == 404
+    assert (await guest.get("/camera/api/c204")).status == 200
+    assert (await guest.get("/camera/c204")).status == 200
+    r = await admin.post("/api/rooms/camera_101/code", json={"code": "C204"})
+    assert r.status == 400 and "already uses" in (await r.json())["error"]
+    r = await admin.post("/api/rooms/camera_204/code", json={"code": None})
+    assert not (await r.json())["custom_code"]
+    assert (await guest.get("/camera/api/c204")).status == 404

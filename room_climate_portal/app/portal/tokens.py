@@ -11,8 +11,16 @@ import base64
 import hashlib
 import hmac
 import json
+import re
 import secrets
 from pathlib import Path
+
+CUSTOM_RE = re.compile(r"^[A-Za-z0-9_-]{4,64}$")
+RESERVED = {"api", "static", "healthz"}
+
+
+class CodeError(ValueError):
+    pass
 
 
 class TokenStore:
@@ -20,6 +28,7 @@ class TokenStore:
         self._path = path
         self._secret: bytes = b""
         self._gen: dict[str, int] = {}
+        self._custom: dict[str, str] = {}
         self._cache: dict[str, str] = {}
         self._load()
 
@@ -28,6 +37,7 @@ class TokenStore:
             raw = json.loads(self._path.read_text(encoding="utf-8"))
             self._secret = bytes.fromhex(raw["secret"])
             self._gen = {k: int(v) for k, v in raw.get("generations", {}).items()}
+            self._custom = {k: str(v) for k, v in raw.get("custom", {}).items()}
         else:
             self._secret = secrets.token_bytes(32)
             self._save()
@@ -36,7 +46,7 @@ class TokenStore:
         self._path.parent.mkdir(parents=True, exist_ok=True)
         tmp = self._path.with_suffix(".tmp")
         tmp.write_text(
-            json.dumps({"secret": self._secret.hex(), "generations": self._gen}, indent=2),
+            json.dumps({"secret": self._secret.hex(), "generations": self._gen, "custom": self._custom}, indent=2),
             encoding="utf-8",
         )
         tmp.chmod(0o600)
@@ -45,14 +55,37 @@ class TokenStore:
     def generation(self, room_id: str) -> int:
         return self._gen.get(room_id, 0)
 
+    def is_custom(self, room_id: str) -> bool:
+        return room_id in self._custom
+
     def token_for(self, room_id: str) -> str:
+        if room_id in self._custom:
+            return self._custom[room_id]
         key = f"{room_id}:{self.generation(room_id)}"
         if key not in self._cache:
             mac = hmac.new(self._secret, key.encode(), hashlib.sha256).digest()[:16]
             self._cache[key] = base64.urlsafe_b64encode(mac).rstrip(b"=").decode()
         return self._cache[key]
 
+    def set_custom(self, room_id: str, code: str | None, room_ids) -> str:
+        """Use an admin-chosen code for the room (None = back to a new random code)."""
+        if code is None:
+            return self.rotate(room_id)
+        code = code.strip()
+        if not CUSTOM_RE.match(code):
+            raise CodeError("Use 4 to 64 characters: letters, digits, - or _.")
+        if code.lower() in RESERVED:
+            raise CodeError(f"'{code}' is reserved.")
+        for other in room_ids:
+            if other != room_id and hmac.compare_digest(self.token_for(other).lower(), code.lower()):
+                raise CodeError(f"Room {other} already uses this code.")
+        self._custom[room_id] = code
+        self._gen[room_id] = self.generation(room_id) + 1
+        self._save()
+        return code
+
     def rotate(self, room_id: str) -> str:
+        self._custom.pop(room_id, None)
         self._gen[room_id] = self.generation(room_id) + 1
         self._save()
         return self.token_for(room_id)

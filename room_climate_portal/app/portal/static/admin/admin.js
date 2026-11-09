@@ -20,11 +20,12 @@
       "<td class=\"mono\">" + esc(r.calendar || "–") + "<div>" + esc(r.lead_time || "default") + " → " + esc(r.lead_minutes) + " min</div></td>" +
       "<td>" + (ev ? esc(ev.summary) + "<div class=\"muted\">" + time(ev.start) + "</div><div class=\"muted\">precondition " + time(ev.precondition_start) + "</div>" : "<span class=\"muted\">none</span>") + "</td>" +
       "<td><a href=\"print?room=" + encodeURIComponent(r.id) + "\" target=\"_blank\" rel=\"noopener\"><img class=\"qr\" alt=\"QR\" src=\"qr/" + encodeURIComponent(r.id) + ".svg?g=" + r.generation + "\"></a>" +
-      "<div class=\"url\">" + esc(r.url) + "</div><div class=\"muted\">" + r.open_pages + " open now</div></td>" +
+      "<div class=\"url\">" + esc(r.url) + (r.custom_code ? " <b>(custom)</b>" : "") + "</div><div class=\"muted\">" + r.open_pages + " open now</div></td>" +
       "<td><div>" + (r.pin_enabled ? "<b>On</b>" : "<span class=\"muted\">Off</span>") + "</div>" +
       "<div class=\"btns\"><button class=\"small\" data-pin=\"" + esc(r.id) + "\">" + (r.pin_enabled ? "Change PIN" : "Set PIN") + "</button>" +
       (r.pin_enabled ? "<button class=\"small\" data-nopin=\"" + esc(r.id) + "\">Remove PIN</button>" : "") +
-      "<button class=\"small\" data-rotate=\"" + esc(r.id) + "\">New QR code</button></div></td></tr>";
+      "<button class=\"small\" data-code=\"" + esc(r.id) + "\" data-current=\"" + esc(r.custom_code ? r.url.split("/").pop() : "") + "\">Custom code</button>" +
+      "<button class=\"small\" data-rotate=\"" + esc(r.id) + "\">New random code</button></div></td></tr>";
   }
 
   function load() {
@@ -62,7 +63,12 @@
     $("#dlg-err").textContent = "";
     var input = $("#dlg-input");
     input.hidden = !opts.input;
-    input.value = "";
+    input.value = opts.value || "";
+    input.type = opts.text_input ? "text" : "password";
+    input.setAttribute("inputmode", opts.text_input ? "text" : "numeric");
+    input.maxLength = opts.text_input ? 64 : 8;
+    input.placeholder = opts.placeholder || "PIN";
+    input.classList.toggle("text", !!opts.text_input);
     var ok = $("#dlg-ok");
     ok.textContent = opts.okLabel || "OK";
     ok.className = opts.danger ? "danger" : "primary";
@@ -118,12 +124,25 @@
         onOk: function () { return postJson("api/rooms/" + encodeURIComponent(nid) + "/pin", { pin: null }); }
       });
     }
+    var c = ev.target.closest("[data-code]");
+    if (c) {
+      var cid = c.getAttribute("data-code");
+      return dialog({
+        title: "Custom code for " + cid,
+        text: "The room link becomes …/" + "<code>. 4-64 letters, digits, - or _. The current printed code stops working. " +
+          "Short or guessable codes (like a room number) let anyone try them, so also set a PIN for this room.",
+        input: true, text_input: true, placeholder: "e.g. camera204-x7k", value: c.getAttribute("data-current"),
+        okLabel: "Save code",
+        validate: function (v) { return /^[A-Za-z0-9_-]{4,64}$/.test(v) ? null : "Use 4 to 64 letters, digits, - or _."; },
+        onOk: function (v) { return postJson("api/rooms/" + encodeURIComponent(cid) + "/code", { code: v }); }
+      });
+    }
     var b = ev.target.closest("[data-rotate]");
     if (!b) return;
     var id = b.getAttribute("data-rotate");
     dialog({
-      title: "Replace the QR code for " + id + "?", text: "The printed code stops working immediately. Print the new one afterwards.",
-      okLabel: "Replace code", danger: true,
+      title: "New random code for " + id + "?", text: "Replaces the current code (also a custom one). The printed code stops working immediately. Print the new one afterwards.",
+      okLabel: "New random code", danger: true,
       onOk: function () { return postJson("api/rooms/" + encodeURIComponent(id) + "/rotate", {}); }
     });
   });

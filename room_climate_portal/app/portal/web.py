@@ -15,6 +15,7 @@ from aiohttp import web
 from .core import Portal, RateLimited
 from .ha import HAError
 from .pins import PIN_RE, PinLocked
+from .tokens import CodeError
 
 _LOGGER = logging.getLogger(__name__)
 STATIC = Path(__file__).parent / "static"
@@ -51,7 +52,7 @@ def client_ip(request: web.Request, portal: Portal) -> str:
 
 
 # --------------------------------------------------------------------------- guest
-TOKEN_RE = r"[A-Za-z0-9_-]{16,64}"
+TOKEN_RE = r"[A-Za-z0-9_-]{4,64}"
 
 
 def build_guest_app(portal: Portal) -> web.Application:
@@ -274,6 +275,7 @@ def build_admin_app(portal: Portal) -> web.Application:
             "next_event": next((e for e in snap["events"] if not e["all_day"]), None),
             "open_pages": portal.watcher_count(rid),
             "pin_enabled": portal.pins.enabled(rid),
+            "custom_code": portal.tokens.is_custom(rid),
         }
 
     def get_room(request) -> str:
@@ -323,6 +325,22 @@ def build_admin_app(portal: Portal) -> web.Application:
         if not PIN_RE.match(pin):
             raise web.HTTPBadRequest(text=json.dumps({"error": "PIN must be 4 to 8 digits"}), content_type="application/json")
         return pin
+
+    @routes.post("/api/rooms/{room_id}/code")
+    async def set_code(request):
+        rid = get_room(request)
+        try:
+            data = await request.json()
+        except Exception:  # noqa: BLE001
+            raise web.HTTPBadRequest(text="bad json")
+        code = data.get("code") if isinstance(data, dict) else None
+        try:
+            portal.tokens.set_custom(rid, code or None, portal.rooms.keys())
+        except CodeError as err:
+            return _json({"error": str(err)}, 400)
+        portal.audit.write(room=rid, action="code_custom" if code else "rotate_token", client="admin")
+        portal.broadcast(rid, {"type": "revoked"})
+        return _json(room_row(rid))
 
     @routes.post("/api/rooms/{room_id}/pin")
     async def set_pin(request):
