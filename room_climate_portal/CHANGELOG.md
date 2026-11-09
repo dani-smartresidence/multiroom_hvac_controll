@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.4.0
+- Manual heating from the room page: start for 1 h / 2 h / 4 h or until a chosen hour; it turns itself off
+  after 2 h by default. While on: +30 min, +1 h, turn off at another hour, or turn off now.
+- Changing the temperature on the page starts manual heating (and turns on a thermostat that was off).
+- Plan a period (from–until, own temperature) within the next 24 h; listed on the room page and the Program page.
+- New options: `hold_default_minutes`, `hold_max_hours`, `hold_end_action` (off / setback), `setback_temp`.
+  Heating is never turned off while a calendar event is preconditioning or running in that room.
+
 ## 0.3.1
 - Browsers and the HA app now always load the current admin and room-page scripts after an update
   (versioned asset URLs, revalidated static files). Before, an old cached script could hide new buttons.

@@ -1,3 +1,4 @@
+import pytest
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
@@ -109,3 +110,29 @@ def test_custom_codes(tmp_path):
         store.set_custom("b", "CAMERA204-X7K", rooms)  # same as room a, ignoring case
     store.rotate("a")
     assert store.resolve("camera204-x7k", rooms) is None and len(store.token_for("a")) == 22
+
+
+def test_parse_hhmm_and_hold_store(tmp_path):
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    from portal.holds import HoldError, HoldStore, parse_hhmm
+
+    tz = ZoneInfo("Europe/Bucharest")
+    now = datetime(2026, 11, 9, 14, 10, tzinfo=tz)
+    assert parse_hhmm("16:30", now, tz) == datetime(2026, 11, 9, 16, 30, tzinfo=tz)
+    assert parse_hhmm("09:00", now, tz) == datetime(2026, 11, 10, 9, 0, tzinfo=tz)
+    start = datetime(2026, 11, 9, 23, 0, tzinfo=tz)
+    assert parse_hhmm("01:00", now, tz, after=start) == datetime(2026, 11, 10, 1, 0, tzinfo=tz)
+    with pytest.raises(HoldError):
+        parse_hhmm("25:99", now, tz)
+    with pytest.raises(HoldError):
+        parse_hhmm(None, now, tz)
+
+    store = HoldStore(tmp_path / "holds.json")
+    store.add("r1", parse_hhmm("18:00", now, tz), parse_hhmm("20:00", now, tz), 22, "planned", False)
+    with pytest.raises(HoldError, match="overlap"):
+        store.check_planned("r1", parse_hhmm("19:00", now, tz), parse_hhmm("21:00", now, tz))
+    store.check_planned("r1", parse_hhmm("20:00", now, tz), parse_hhmm("21:00", now, tz))
+    store.check_planned("r2", parse_hhmm("19:00", now, tz), parse_hhmm("21:00", now, tz))
+    assert len(HoldStore(tmp_path / "holds.json").for_room("r1")) == 1  # persisted

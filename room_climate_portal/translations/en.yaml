@@ -58,5 +58,15 @@ configuration:
     name: Wrong PIN attempts before lockout
   pin_lockout_minutes:
     name: Lockout (minutes)
+  hold_default_minutes:
+    name: Manual heating default length (minutes)
+    description: When a guest starts heating or changes the temperature from the room page, it turns itself off after this long unless they pick another end time.
+  hold_max_hours:
+    name: Longest manual heating period (hours)
+  hold_end_action:
+    name: When manual heating ends
+    description: "off turns the thermostat off; setback keeps it on at the setback temperature. Nothing changes if a calendar event is preconditioning or running in that room."
+  setback_temp:
+    name: Setback temperature (°C)
 network:
   8080/tcp: Guest pages opened from the room QR codes

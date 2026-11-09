@@ -59,6 +59,39 @@
       <div class="modes" id="modes" hidden></div>
     </div>
 
+    <div class="sec"><h2 data-i18n="manual_heating"></h2></div>
+    <div class="card hold" id="hold">
+      <div class="hold-hd">
+        <div class="hold-ic" id="hold-ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke-width="2" aria-hidden="true"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2M9 2h6"/></svg></div>
+        <div class="hold-txt"><div class="t" id="hold-title"></div><div class="m" id="hold-msg"></div></div>
+      </div>
+      <div id="hold-on" hidden>
+        <div class="hbtns">
+          <button type="button" data-act="extend" data-min="30">+30 min</button>
+          <button type="button" data-act="extend" data-min="60">+1 h</button>
+          <button type="button" class="stop" data-act="stop" data-i18n="stop_now"></button>
+        </div>
+        <div class="hrow"><label for="hold-until" data-i18n="off_at"></label><input type="time" id="hold-until" required><button type="button" class="pri" data-act="until" data-i18n="set"></button></div>
+      </div>
+      <div id="hold-off" hidden>
+        <div class="hbtns" id="hold-durations"></div>
+        <div class="hrow"><label for="hold-start-until" data-i18n="or_until"></label><input type="time" id="hold-start-until" required><button type="button" data-act="start-until" data-i18n="start"></button></div>
+      </div>
+      <div class="plans" id="plans"></div>
+      <button type="button" class="plan-toggle" id="plan-toggle"><span aria-hidden="true">+</span> <span data-i18n="plan_period"></span></button>
+      <form class="plan-form" id="plan-form" autocomplete="off" hidden>
+        <div class="plan-grid">
+          <label><span data-i18n="from"></span><input type="time" id="plan-start" required></label>
+          <label><span data-i18n="to"></span><input type="time" id="plan-end" required></label>
+        </div>
+        <div class="plan-temp"><span data-i18n="temperature"></span>
+          <div class="stepper"><button type="button" id="plan-minus" aria-label="−">−</button><b id="plan-temp"></b><button type="button" id="plan-plus" aria-label="+">+</button></div>
+        </div>
+        <div class="plan-err" id="plan-err" role="alert"></div>
+        <div class="plan-btns"><button type="button" id="plan-cancel" data-i18n="cancel"></button><button type="submit" class="pri" data-i18n="schedule_it"></button></div>
+      </form>
+    </div>
+
     <div class="sec"><h2 data-i18n="next_in_room"></h2><a href="#program" id="all-link" data-i18n="all_events"></a></div>
     <div id="next-event"></div>
   </section>
@@ -75,6 +108,7 @@
     <div class="legend">
       <span><i class="lg-pre"></i><span data-i18n="preconditioning"></span></span>
       <span><i class="lg-ev"></i><span data-i18n="event"></span></span>
+      <span><i class="lg-man"></i><span data-i18n="manual_short"></span></span>
       <span><i class="lg-now"></i><span data-i18n="now_short"></span></span>
     </div>
     <div id="schedule-list"></div>

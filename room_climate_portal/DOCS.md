@@ -102,14 +102,31 @@ Import the blueprint `blueprints/automation/room_precondition.yaml` from this re
 automation per room (precondition sensor + thermostat). It fires at exactly the time the page shows,
 so page and heating never disagree.
 
-## 6. Custom codes
+## 6. Manual heating and planned periods
+
+Rooms without a calendar event can still be heated from the room page:
+
+- **Start heating** for 1 h, 2 h or 4 h, or **until** a chosen hour. Changing the temperature with − / +
+  also starts manual heating (and switches a thermostat that is off back on).
+- By default manual heating **turns itself off after 2 hours** (`hold_default_minutes`). While it runs the
+  guest can add +30 min / +1 h, set another end hour, or turn it off now. One period is at most
+  `hold_max_hours` (12 h).
+- **Plan a period**: from–until hours within the next 24 h, with its own temperature (up to 4 per room).
+  It turns on and off by itself and shows on the Program page.
+- At the end the thermostat is turned off (`hold_end_action: off`) or set to `setback_temp`
+  (`hold_end_action: setback`). If a calendar event is preconditioning or running in that room at that
+  moment, nothing is changed, so the event keeps its heating.
+
+Periods are stored in `/data/holds.json` and survive restarts and updates.
+
+## 7. Custom codes
 
 By default each room gets a random 22-character code. **Custom code** on the admin page lets you choose it,
 e.g. `sala-102` → `https://camera.voxdomini.ro/camera/sala-102`. Codes must be unique and use 4-64 letters,
 digits, `-` or `_`. A short or guessable code (like the room number) can be tried by anyone, so give such
 rooms a PIN. **New random code** replaces a custom code with a random one. Either change stops the old printed code.
 
-## 7. Print the QR codes
+## 8. Print the QR codes
 
 Open **Room QR** in the HA sidebar. It lists every room with what was found (and what is missing),
 the live temperatures, the next event and its QR code. **Print all QR codes** gives an A4 sheet;

@@ -13,6 +13,7 @@ import segno
 from aiohttp import web
 
 from .core import Portal, RateLimited
+from .holds import HoldError
 from .ha import HAError
 from .pins import PIN_RE, PinLocked
 from .tokens import CodeError
@@ -253,6 +254,24 @@ def build_guest_app(portal: Portal) -> web.Application:
         except HAError as err:
             return _json({"error": "ha_error", "message": err.message}, 502)
         return _json({"ok": True, "hvac_mode": applied})
+
+    @routes.post(api + "/hold")
+    async def hold(request):
+        room_id = authorize(request)
+        data = await _body(request)
+        client = portal.tokens.client_id(client_ip(request, portal))
+        try:
+            snap = await portal.hold_action(room_id, data, client)
+        except HoldError as err:
+            return _json({"error": str(err) or "bad_value"}, 400)
+        except (TypeError, ValueError):
+            return _json({"error": "bad_value"}, 400)
+        except RateLimited as err:
+            return _json({"error": "rate_limited", "scope": str(err)}, 429)
+        except HAError as err:
+            _LOGGER.warning("manual heating failed for %s: %s", room_id, err)
+            return _json({"error": "ha_error", "message": err.message}, 502)
+        return _json({"ok": True, "room": snap})
 
     app.add_routes(routes)
     app.router.add_static(base + "/static/", STATIC / "guest", show_index=False)

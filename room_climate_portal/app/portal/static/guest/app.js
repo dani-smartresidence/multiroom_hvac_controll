@@ -27,7 +27,24 @@
       title: "Climat cameră",
       pin_title: "Introduceți codul PIN", pin_body: "Codul PIN al camerei este necesar pentru a controla temperatura.",
       pin_submit: "Continuă", pin_wrong: "PIN greșit. Mai aveți {n} încercări.",
-      pin_locked: "Prea multe încercări. Reîncercați peste {m} min.", pin_short: "PIN-ul are între 4 și 8 cifre."
+      pin_locked: "Prea multe încercări. Reîncercați peste {m} min.", pin_short: "PIN-ul are între 4 și 8 cifre.",
+      manual_heating: "Încălzire manuală", manual_short: "Manual", hold_on_title: "Încălzire pornită · {t} °C",
+      plan_on_title: "Perioadă programată · {t} °C",
+      hold_on_msg: "Se oprește automat la <b>{time}</b> · {left}", hold_on_msg_day: "Se oprește automat {day} la <b>{time}</b> · {left}",
+      hold_off_title: "Pornește încălzirea", hold_off_msg: "Alegeți cât timp. Se oprește singură după {d}, dacă nu alegeți altceva.",
+      hold_event_msg: "Programul camerei controlează acum încălzirea. Puteți porni și manual.",
+      stop_now: "Oprește", off_at: "Oprește la", set: "Setează", or_until: "Sau până la", start: "Pornește",
+      plan_period: "Programează o perioadă", from: "De la", to: "Până la", temperature: "Temperatură",
+      cancel: "Renunță", schedule_it: "Programează", planned: "{day}, {start} – {end} · {t} °C", remove: "Șterge",
+      left_min: "încă {m} min", left_hm: "încă {h} h {m} min", left_h: "încă {h} h",
+      dur_h: "{h}\u00a0h", dur_min: "{m}\u00a0min",
+      ok_started: "Încălzire pornită până la <b>{time}</b>", ok_until: "Se oprește la <b>{time}</b>",
+      ok_stopped: "Încălzirea a fost oprită", ok_planned: "Perioadă programată: <b>{day} {time}</b>", ok_cancelled: "Perioada a fost ștearsă",
+      hold_title_row: "Încălzire manuală", plan_title_row: "Perioadă programată", badge_on: "● Pornit",
+      e_too_long: "Cel mult {h} h odată.", e_end_before_start: "Ora de sfârșit trebuie să fie după ora de început.",
+      e_overlap: "Se suprapune cu o altă perioadă programată.", e_too_many: "Sunt deja prea multe perioade programate.",
+      e_too_far: "Puteți programa doar în următoarele 24 de ore.", e_too_short: "Durata minimă este 5 minute.",
+      e_bad_time: "Alegeți o oră validă.", e_no_active: "Încălzirea manuală nu mai este pornită.", e_hold: "Nu s-a putut salva."
     },
     en: {
       loading: "Loading…", live: "Live", offline: "Reconnecting…", target: "Target", now: "Now",
@@ -53,7 +70,24 @@
       title: "Room climate",
       pin_title: "Enter the PIN", pin_body: "The room PIN is required to control the temperature.",
       pin_submit: "Continue", pin_wrong: "Wrong PIN. {n} attempts left.",
-      pin_locked: "Too many attempts. Try again in {m} min.", pin_short: "The PIN has 4 to 8 digits."
+      pin_locked: "Too many attempts. Try again in {m} min.", pin_short: "The PIN has 4 to 8 digits.",
+      manual_heating: "Manual heating", manual_short: "Manual", hold_on_title: "Heating on · {t} °C",
+      plan_on_title: "Planned period · {t} °C",
+      hold_on_msg: "Turns off automatically at <b>{time}</b> · {left}", hold_on_msg_day: "Turns off automatically {day} at <b>{time}</b> · {left}",
+      hold_off_title: "Start heating", hold_off_msg: "Choose for how long. It turns itself off after {d} unless you choose otherwise.",
+      hold_event_msg: "The room schedule is controlling the heating now. You can still start it manually.",
+      stop_now: "Turn off", off_at: "Turn off at", set: "Set", or_until: "Or until", start: "Start",
+      plan_period: "Plan a period", from: "From", to: "Until", temperature: "Temperature",
+      cancel: "Cancel", schedule_it: "Plan it", planned: "{day}, {start} – {end} · {t} °C", remove: "Remove",
+      left_min: "{m} min left", left_hm: "{h} h {m} min left", left_h: "{h} h left",
+      dur_h: "{h}\u00a0h", dur_min: "{m}\u00a0min",
+      ok_started: "Heating on until <b>{time}</b>", ok_until: "Turns off at <b>{time}</b>",
+      ok_stopped: "Heating turned off", ok_planned: "Period planned: <b>{day} {time}</b>", ok_cancelled: "Period removed",
+      hold_title_row: "Manual heating", plan_title_row: "Planned period", badge_on: "● On",
+      e_too_long: "At most {h} h at a time.", e_end_before_start: "The end time must be after the start time.",
+      e_overlap: "It overlaps another planned period.", e_too_many: "There are already too many planned periods.",
+      e_too_far: "You can only plan within the next 24 hours.", e_too_short: "The minimum is 5 minutes.",
+      e_bad_time: "Choose a valid time.", e_no_active: "Manual heating is no longer on.", e_hold: "Could not save."
     }
   };
 
@@ -179,7 +213,7 @@
     else label = t("idle");
     action.innerHTML = (action.classList.contains("heating") ? '<svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2c2 4 6 6 6 11a6 6 0 0 1-12 0c0-3 2-5 3-7 1 2 2 3 3 3 0-3-1-5 0-7z" fill="currentColor"/></svg>' : "") + esc(label);
 
-    var canChange = c.available && room.connected && c.hvac_mode !== "off";
+    var canChange = c.available && room.connected;
     $("minus").disabled = !canChange || shown <= c.min;
     $("plus").disabled = !canChange || shown >= c.max;
     $("limits").textContent = t("adjustable", { min: fmtStep(c.min), max: fmtStep(c.max), step: fmtStep(c.step) });
@@ -199,6 +233,8 @@
         return '<button type="button" data-mode="' + esc(m) + '" class="' + (m === c.hvac_mode ? "on" : "") + '">' + esc(t("mode_" + m)) + "</button>";
       }).join("");
     } else modes.hidden = true;
+
+    renderHold();
 
     var next = upcoming()[0];
     $("next-event").innerHTML = next ? '<div class="card">' + nextCard(next) + "</div>"
@@ -239,10 +275,19 @@
   }
 
   function renderSchedule() {
-    var now = Date.now(), list = upcoming(), html = "", lastDay = null;
+    var now = Date.now(), html = "", lastDay = null;
+    var list = upcoming().concat((room.holds || []).map(function (h) { return { hold: h, start: h.start, end: h.end }; }));
+    list.sort(function (a, b) { return new Date(a.start) - new Date(b.start); });
     list.forEach(function (e) {
       var d = dayKey(new Date(e.start));
       if (d !== lastDay) { html += '<div class="day">' + esc(dayLabel(e.start)) + "</div>"; lastDay = d; }
+      if (e.hold) {
+        var h = e.hold;
+        html += '<div class="row"><div class="rt"><div class="t">' + esc(t(h.kind === "planned" ? "plan_title_row" : "hold_title_row")) + "</div>" +
+          (h.active ? '<span class="badge now">' + esc(t("badge_on")) + "</span>" : '<span class="badge man">' + esc(t("badge_sched")) + "</span>") +
+          '</div><div class="m">' + esc(fmtTime(h.start) + " – " + fmtTime(h.end) + " · " + t("target_short") + " " + fmtT(h.target) + " °C") + "</div></div>";
+        return;
+      }
       var st = evState(e, now);
       var badge = st === "pre" ? '<span class="badge now">' + esc(t("badge_pre")) + "</span>"
         : st === "active" ? '<span class="badge act">' + esc(t("badge_active")) + "</span>"
@@ -289,7 +334,7 @@
   // ------------------------------------------------------------------ actions
   function step(dir) {
     var c = room.climate;
-    var base = pending != null ? pending : (awaiting != null ? awaiting : (c.target != null ? c.target : c.min));
+    var base = pending != null ? pending : (awaiting != null ? awaiting : (c.target != null ? c.target : room.default_target));
     var next = Math.round((base + dir * c.step) / c.step) * c.step;
     next = Math.min(c.max, Math.max(c.min, Math.round(next * 100) / 100));
     if (undoValue == null) undoValue = c.target;
@@ -429,6 +474,160 @@
       $("pin-input").focus();
     });
   }
+
+
+  // ------------------------------------------------------------ manual heating
+  var planTemp = null, planOpen = false, holdBusy = false;
+  function fmtT(v) { return fmt1(v).replace(/[,.]0$/, ""); }
+  function hhmm(d) {
+    var p = new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: tz() }).formatToParts(d);
+    var get = function (k) { return (p.filter(function (x) { return x.type === k; })[0] || {}).value; };
+    return (get("hour") === "24" ? "00" : get("hour")) + ":" + get("minute");
+  }
+  function fmtDur(min) {
+    return min % 60 === 0 ? t("dur_h", { h: min / 60 }) : (min < 60 ? t("dur_min", { m: min }) : t("dur_h", { h: fmtStep(min / 60) }));
+  }
+  function leftText(ms) {
+    var m = Math.max(1, Math.round(ms / 60000)), h = Math.floor(m / 60);
+    m = m % 60;
+    if (!h) return t("left_min", { m: m });
+    return m ? t("left_hm", { h: h, m: m }) : t("left_h", { h: h });
+  }
+  function dayWord(iso) {
+    var k = dayKey(new Date(iso));
+    if (k === dayKey(new Date())) return null;
+    return shortDay(iso).toLowerCase();
+  }
+  function activeHold() { return (room.holds || []).filter(function (h) { return h.active; })[0]; }
+  function eventRunning() {
+    var now = Date.now();
+    return (room.events || []).some(function (e) {
+      if (e.all_day) return false;
+      var p = new Date(e.precondition_start || e.start).getTime();
+      return now >= p && now < new Date(e.end).getTime();
+    });
+  }
+
+  function renderHold() {
+    var c = room.climate, h = activeHold(), now = Date.now();
+    var usable = c.available && room.connected;
+    $("hold-ic").classList.toggle("on", !!h);
+    $("hold-on").hidden = !h;
+    $("hold-off").hidden = !!h;
+    if (h) {
+      $("hold-title").textContent = t(h.kind === "planned" ? "plan_on_title" : "hold_on_title", { t: fmtT(c.target != null ? c.target : h.target) });
+      var dw = dayWord(h.end);
+      $("hold-msg").innerHTML = t(dw ? "hold_on_msg_day" : "hold_on_msg", { time: fmtTime(h.end), day: esc(dw || ""), left: esc(leftText(new Date(h.end) - now)) });
+      var inp = $("hold-until");
+      if (document.activeElement !== inp && inp.getAttribute("data-for") !== h.end) { inp.value = hhmm(new Date(h.end)); inp.setAttribute("data-for", h.end); }
+    } else {
+      var d = room.hold_default_minutes || 120;
+      $("hold-title").textContent = t("hold_off_title");
+      $("hold-msg").textContent = eventRunning() && c.hvac_mode !== "off" ? t("hold_event_msg") : t("hold_off_msg", { d: fmtDur(d) });
+      var opts = [60, d, d * 2].filter(function (v, i, a) { return a.indexOf(v) === i && v <= (room.hold_max_hours || 12) * 60; });
+      opts.sort(function (a, b) { return a - b; });
+      var key = opts.join(",") + "|" + lang;
+      var box = $("hold-durations");
+      if (box.getAttribute("data-key") !== key) {
+        box.innerHTML = opts.map(function (m) {
+          return '<button type="button" data-act="start" data-min="' + m + '"' + (m === d ? ' class="pri"' : "") + ">" + esc(fmtDur(m)) + "</button>";
+        }).join("");
+        box.setAttribute("data-key", key);
+      }
+      var su = $("hold-start-until");
+      if (!su.value) su.value = hhmm(new Date(now + d * 60000));
+    }
+    document.querySelectorAll("#hold button[data-act]").forEach(function (b) { b.disabled = !usable || holdBusy; });
+
+    var planned = (room.holds || []).filter(function (x) { return !x.active; });
+    $("plans").innerHTML = planned.map(function (p) {
+      return '<div class="plan"><span>' + t("planned", { day: esc(shortDay(p.start)), start: "<b>" + fmtTime(p.start) + "</b>", end: "<b>" + fmtTime(p.end) + "</b>", t: fmtT(p.target) }) +
+        '</span><button type="button" data-cancel="' + esc(p.id) + '" aria-label="' + esc(t("remove")) + '">×</button></div>';
+    }).join("");
+    $("plan-toggle").hidden = planOpen || planned.length >= 4;
+    $("plan-form").hidden = !planOpen;
+    if (planOpen) $("plan-temp").textContent = fmt1(planTemp) + " °C";
+  }
+
+  function holdError(res) {
+    if (res.status === 429) return t("err_rate");
+    if (res.status === 0) return t("err_offline");
+    var code = res.body && res.body.error;
+    if (code && I18N.ro["e_" + code]) return t("e_" + code, { h: room.hold_max_hours || 12 });
+    return t("e_hold");
+  }
+
+  function holdPost(body, okMsg) {
+    holdBusy = true;
+    renderHold();
+    return post("/hold", body).then(function (res) {
+      holdBusy = false;
+      if (res.ok) {
+        onRoom(res.body.room);
+        if (okMsg) showToast(okMsg(res.body.room));
+      } else {
+        if (res.status === 401) return load();
+        if (res.status === 404) return showInvalid();
+        if (body.action !== "plan") showToast(esc(holdError(res)), false, true);
+        renderHold();
+      }
+      return res;
+    });
+  }
+
+  function endMsg(key) {
+    return function (r) {
+      var h = (r.holds || []).filter(function (x) { return x.active; })[0];
+      return h ? t(key, { time: fmtTime(h.end) }) : "";
+    };
+  }
+
+  $("hold").addEventListener("click", function (ev) {
+    var b = ev.target.closest("button[data-act]");
+    if (b && !b.disabled) {
+      var act = b.getAttribute("data-act"), min = parseInt(b.getAttribute("data-min"), 10);
+      if (act === "start") holdPost({ action: "start", minutes: min }, endMsg("ok_started"));
+      else if (act === "start-until") { if ($("hold-start-until").value) holdPost({ action: "start", until: $("hold-start-until").value }, endMsg("ok_started")); }
+      else if (act === "extend") holdPost({ action: "extend", minutes: min }, endMsg("ok_until"));
+      else if (act === "until") { if ($("hold-until").value) holdPost({ action: "until", until: $("hold-until").value }, endMsg("ok_until")); }
+      else if (act === "stop") holdPost({ action: "stop" }, function () { return t("ok_stopped"); });
+      return;
+    }
+    var x = ev.target.closest("button[data-cancel]");
+    if (x) holdPost({ action: "cancel", id: x.getAttribute("data-cancel") }, function () { return t("ok_cancelled"); });
+  });
+
+  $("plan-toggle").addEventListener("click", function () {
+    var from = Date.now() + 5 * 60000;
+    (room.holds || []).forEach(function (h) { from = Math.max(from, new Date(h.end).getTime()); });
+    var start = new Date(Math.ceil(from / 3600000) * 3600000);
+    $("plan-start").value = hhmm(start);
+    $("plan-end").value = hhmm(new Date(start.getTime() + (room.hold_default_minutes || 120) * 60000));
+    planTemp = room.default_target != null ? room.default_target : 21;
+    $("plan-err").textContent = "";
+    planOpen = true;
+    renderHold();
+  });
+  $("plan-cancel").addEventListener("click", function () { planOpen = false; renderHold(); });
+  function planStep(dir) {
+    var c = room.climate, st = c.step || 0.5;
+    planTemp = Math.min(c.max, Math.max(c.min, Math.round((planTemp + dir * st) / st) * st));
+    renderHold();
+  }
+  $("plan-minus").addEventListener("click", function () { planStep(-1); });
+  $("plan-plus").addEventListener("click", function () { planStep(1); });
+  $("plan-form").addEventListener("submit", function (ev) {
+    ev.preventDefault();
+    var start = $("plan-start").value, end = $("plan-end").value;
+    if (!start || !end) { $("plan-err").textContent = t("e_bad_time"); return; }
+    holdPost({ action: "plan", start: start, until: end, temperature: planTemp }, function (r) {
+      var p = (r.holds || []).filter(function (x) { return !x.active && hhmm(new Date(x.start)) === start; })[0];
+      return t("ok_planned", { day: p ? esc(shortDay(p.start)) : "", time: start });
+    }).then(function (res) {
+      if (res && res.ok) { planOpen = false; renderHold(); }
+      else if (res && res.status !== 401 && res.status !== 404) $("plan-err").textContent = holdError(res);
+    });
+  });
 
   // ------------------------------------------------------------------ wire up
   $("plus").addEventListener("click", function () { step(1); });

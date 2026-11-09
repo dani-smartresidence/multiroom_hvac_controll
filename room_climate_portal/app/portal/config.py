@@ -36,6 +36,10 @@ class Options:
     pin_remember_hours: int = 24
     pin_max_attempts: int = 5
     pin_lockout_minutes: int = 10
+    hold_default_minutes: int = 120
+    hold_max_hours: int = 12
+    hold_end_action: str = "off"
+    setback_temp: float = 16.0
 
     @classmethod
     def load(cls, path: Path) -> "Options":
@@ -67,6 +71,10 @@ class Paths:
     @property
     def audit(self) -> Path:
         return self.data / "audit.jsonl"
+
+    @property
+    def holds(self) -> Path:
+        return self.data / "holds.json"
 
     @property
     def pins(self) -> Path:

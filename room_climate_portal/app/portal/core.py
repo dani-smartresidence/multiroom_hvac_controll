@@ -12,6 +12,7 @@ from .audit import AuditLog
 from .config import Options, Paths
 from .ha import HAClient, HAError
 from .pins import PinStore
+from .holds import HoldError, HoldStore, parse_hhmm
 from .rooms import Room, clamp_setpoint, discover, load_overrides
 from .schedule import build_events, lead_minutes_from_state, next_precondition
 from .tokens import TokenStore
@@ -58,6 +59,7 @@ class Portal:
         self._schedule_locks: dict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
         self._published: dict[str, tuple] = {}
         self.ready = False
+        self.holds = HoldStore(paths.holds)
         ha.on_connect = self._on_connect
         ha.on_disconnect = self._on_disconnect
 
@@ -271,6 +273,10 @@ class Portal:
             "events": self.schedules.get(room.id, []),
             "help_text": self.options.help_text,
             "default_language": self.options.default_language,
+            "holds": [HoldStore.public(h) for h in self.holds.for_room(room.id)],
+            "hold_default_minutes": self.options.hold_default_minutes,
+            "hold_max_hours": self.options.hold_max_hours,
+            "default_target": min(max(self.options.default_target_temp, lo), hi),
         }
 
     # -------------------------------------------------------------- fan-out
@@ -321,9 +327,193 @@ class Portal:
         target = clamp_setpoint(room, value, attrs)
         self._check_rate(room_id, client)
         old = attrs.get("temperature")
-        await self.ha.call_service("climate", "set_temperature", {"temperature": target}, entity_id=room.climate)
+        data: dict = {"temperature": target}
+        mode = self._heat_mode(room)
+        if mode:  # thermostat is off: a change from the page switches heating on
+            data["hvac_mode"] = mode
+        await self.ha.call_service("climate", "set_temperature", data, entity_id=room.climate)
         self.audit.write(room=room_id, action="set_temperature", old=old, new=target, client=client)
+        hold = self.holds.active(room_id)
+        if hold:
+            hold["target"] = target
+            self.holds.save()
+        else:
+            # A change from the page is manual heating: it switches itself off later.
+            now = datetime.now(self.tz)
+            self.holds.add(room_id, now, self._default_end(room_id, now), target, "manual", True)
+        self.broadcast(room_id, {"type": "room", "room": self.snapshot(room_id)})
         return target
+
+    # ------------------------------------------------------------ manual heating
+    def _event_running(self, room_id: str, at: datetime) -> dict | None:
+        """Event that is preconditioning or in progress at `at`."""
+        for ev in self.schedules.get(room_id, []):
+            if ev["all_day"]:
+                continue
+            pre = datetime.fromisoformat(ev["precondition_start"] or ev["start"])
+            if pre <= at < datetime.fromisoformat(ev["end"]):
+                return ev
+        return None
+
+    def _default_end(self, room_id: str, now: datetime) -> datetime:
+        end = now + timedelta(minutes=self.options.hold_default_minutes)
+        ev = self._event_running(room_id, now)
+        if ev and datetime.fromisoformat(ev["end"]) > end:
+            end = datetime.fromisoformat(ev["end"])
+        return end
+
+    def _limit_end(self, start: datetime, end: datetime) -> datetime:
+        if end <= start:
+            raise HoldError("end_before_start")
+        if end - start > timedelta(hours=self.options.hold_max_hours):
+            raise HoldError("too_long")
+        return end
+
+    def _heat_mode(self, room: Room) -> str | None:
+        st = self.states.get(room.climate or "") or {}
+        modes = (st.get("attributes") or {}).get("hvac_modes") or []
+        if st.get("state") not in (None, "off", "unavailable", "unknown"):
+            return None  # already on
+        for m in ("heat", "heat_cool", "auto"):
+            if m in modes:
+                return m
+        return None
+
+    async def _apply_on(self, room: Room, target: float) -> float:
+        st = self.states.get(room.climate or "") or {}
+        target = clamp_setpoint(room, target, st.get("attributes") or {})
+        data: dict = {"temperature": target}
+        mode = self._heat_mode(room)
+        if mode:
+            data["hvac_mode"] = mode
+        await self.ha.call_service("climate", "set_temperature", data, entity_id=room.climate)
+        return target
+
+    async def _apply_off(self, room: Room, reason: str) -> None:
+        now = datetime.now(self.tz)
+        if self._event_running(room.id, now):
+            self.audit.write(room=room.id, action="hold_end_kept_for_event", client="timer")
+            return
+        st = self.states.get(room.climate or "") or {}
+        modes = (st.get("attributes") or {}).get("hvac_modes") or []
+        if self.options.hold_end_action == "off" and "off" in modes:
+            await self.ha.call_service("climate", "set_hvac_mode", {"hvac_mode": "off"}, entity_id=room.climate)
+            self.audit.write(room=room.id, action="heating_off", reason=reason, client="timer")
+        else:
+            await self.ha.call_service(
+                "climate", "set_temperature", {"temperature": self.options.setback_temp}, entity_id=room.climate
+            )
+            self.audit.write(room=room.id, action="setback", new=self.options.setback_temp, reason=reason, client="timer")
+
+    async def hold_action(self, room_id: str, data: dict, client: str) -> dict:
+        room = self.rooms[room_id]
+        if not room.climate:
+            raise HAError("no_climate", "room has no thermostat")
+        now = datetime.now(self.tz)
+        action = data.get("action")
+        active = self.holds.active(room_id)
+
+        def target_from(value) -> float:
+            if value is None:
+                st = self.states.get(room.climate) or {}
+                cur = (st.get("attributes") or {}).get("temperature")
+                if st.get("state") not in (None, "off") and isinstance(cur, (int, float)):
+                    return float(cur)
+                return self.options.default_target_temp
+            return float(value)
+
+        def end_from(start: datetime) -> datetime:
+            if data.get("until"):
+                return self._limit_end(start, parse_hhmm(data["until"], now, self.tz, after=start))
+            if data.get("minutes") is not None:
+                minutes = int(data["minutes"])
+                if minutes < 5:
+                    raise HoldError("too_short")
+                return self._limit_end(start, start + timedelta(minutes=minutes))
+            return self._default_end(room_id, start)
+
+        if action == "start":
+            self._check_rate(room_id, client)
+            end = end_from(now)
+            target = await self._apply_on(room, target_from(data.get("temperature")))
+            if active:
+                self.holds.remove(active["id"])
+            hold = self.holds.add(room_id, now, end, target, "manual", True)
+            self.audit.write(room=room_id, action="heating_on", new=target, until=hold["end"], client=client)
+        elif action in ("extend", "until"):
+            if not active:
+                raise HoldError("no_active")
+            start = datetime.fromisoformat(active["start"])
+            if action == "extend":
+                new_end = datetime.fromisoformat(active["end"]) + timedelta(minutes=int(data.get("minutes", 60)))
+            else:
+                new_end = parse_hhmm(data.get("until"), now, self.tz)
+            active["end"] = self._limit_end(start, new_end).isoformat()
+            self.holds.save()
+            self.audit.write(room=room_id, action="heating_until", until=active["end"], client=client)
+        elif action == "stop":
+            if not active:
+                raise HoldError("no_active")
+            self._check_rate(room_id, client)
+            self.holds.remove(active["id"])
+            await self._apply_off(room, "stopped")
+        elif action == "plan":
+            start = parse_hhmm(data.get("start"), now, self.tz)
+            end = self._limit_end(start, parse_hhmm(data.get("until") or data.get("end"), now, self.tz, after=start))
+            if start - now > timedelta(hours=24):
+                raise HoldError("too_far")
+            self.holds.check_planned(room_id, start, end)
+            st = self.states.get(room.climate) or {}
+            target = clamp_setpoint(room, target_from(data.get("temperature")), st.get("attributes") or {})
+            self.holds.add(room_id, start, end, target, "planned", False)
+            self.audit.write(room=room_id, action="heating_planned", new=target, start=start.isoformat(), until=end.isoformat(), client=client)
+        elif action == "cancel":
+            hold = next((h for h in self.holds.for_room(room_id) if h["id"] == data.get("id") and not h.get("active")), None)
+            if not hold:
+                raise HoldError("not_found")
+            self.holds.remove(hold["id"])
+            self.audit.write(room=room_id, action="heating_plan_cancelled", client=client)
+        else:
+            raise HoldError("bad_action")
+        snap = self.snapshot(room_id)
+        self.broadcast(room_id, {"type": "room", "room": snap})
+        return snap
+
+    async def hold_loop(self) -> None:
+        while True:
+            await asyncio.sleep(15)
+            if not (self.ready and self.ha.connected.is_set()):
+                continue
+            try:
+                await self.process_holds()
+            except Exception:  # noqa: BLE001
+                _LOGGER.exception("Manual heating timer failed")
+
+    async def process_holds(self) -> None:
+        now = datetime.now(self.tz)
+        for hold in list(self.holds.holds):
+            room = self.rooms.get(hold["room"])
+            if room is None or not room.climate:
+                continue
+            start = datetime.fromisoformat(hold["start"])
+            end = datetime.fromisoformat(hold["end"])
+            changed = False
+            if not hold.get("active") and start <= now < end:
+                current = self.holds.active(room.id)
+                if current:
+                    self.holds.remove(current["id"])
+                await self._apply_on(room, hold["target"])
+                hold["active"] = True
+                self.holds.save()
+                self.audit.write(room=room.id, action="heating_on", new=hold["target"], until=hold["end"], client="plan")
+                changed = True
+            if now >= end:
+                self.holds.remove(hold["id"])
+                if hold.get("active"):
+                    await self._apply_off(room, "timer")
+                changed = True
+            if changed:
+                self.broadcast(room.id, {"type": "room", "room": self.snapshot(room.id)})
 
     async def set_mode(self, room_id: str, mode: str, client: str) -> str:
         room = self.rooms[room_id]
@@ -336,6 +526,10 @@ class Portal:
         self._check_rate(room_id, client)
         await self.ha.call_service("climate", "set_hvac_mode", {"hvac_mode": mode}, entity_id=room.climate)
         self.audit.write(room=room_id, action="set_hvac_mode", old=st.get("state"), new=mode, client=client)
+        active = self.holds.active(room_id)
+        if mode == "off" and active:
+            self.holds.remove(active["id"])
+            self.broadcast(room_id, {"type": "room", "room": self.snapshot(room_id)})
         return mode
 
     # ------------------------------------------------------------------ tokens

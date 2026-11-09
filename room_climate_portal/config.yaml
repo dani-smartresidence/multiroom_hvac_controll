@@ -1,5 +1,5 @@
 name: Room Climate Portal
-version: "0.3.1"
+version: "0.4.0"
 slug: room_climate_portal
 description: Per-room thermostat pages opened by scanning a QR code in each room
 url: https://github.com/dani-smartresidence/multiroom_hvac_controll
@@ -42,6 +42,10 @@ options:
   pin_remember_hours: 24
   pin_max_attempts: 5
   pin_lockout_minutes: 10
+  hold_default_minutes: 120
+  hold_max_hours: 12
+  hold_end_action: "off"
+  setback_temp: 16
 schema:
   public_url: url
   base_path: str
@@ -64,3 +68,7 @@ schema:
   pin_remember_hours: int(1,720)
   pin_max_attempts: int(1,20)
   pin_lockout_minutes: int(1,1440)
+  hold_default_minutes: int(15,720)
+  hold_max_hours: int(1,24)
+  hold_end_action: list(off|setback)
+  setback_temp: float(5,25)

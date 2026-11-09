@@ -183,7 +183,7 @@ class FakeHA:
                     return await err("not_found", f"{target} not found")
                 attrs = dict(st["attributes"], temperature=data["temperature"])
                 await ok({"context": {}})
-                await self.set_state(target, st["state"], attrs)
+                await self.set_state(target, data.get("hvac_mode", st["state"]), attrs)
                 return
             if dom == "climate" and svc == "set_hvac_mode":
                 st = self.states[target]

@@ -46,7 +46,7 @@ async def main() -> None:
         for sig in (signal.SIGTERM, signal.SIGINT):
             loop.add_signal_handler(sig, stop.set)
 
-        tasks = [asyncio.create_task(ha.run_forever()), asyncio.create_task(portal.schedule_loop())]
+        tasks = [asyncio.create_task(ha.run_forever()), asyncio.create_task(portal.schedule_loop()), asyncio.create_task(portal.hold_loop())]
         await stop.wait()
         await ha.stop()
         for t in tasks:

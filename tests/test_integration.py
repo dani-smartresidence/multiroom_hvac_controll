@@ -205,3 +205,107 @@ async def test_assets_are_versioned(env):
     page = await (await guest.get("/camera/AAAAAAAAAAAAAAAAAAAAAA")).text()
     assert "/camera/static/app.js?v=" in page
     assert (await guest.get("/camera/static/app.js")).headers["Cache-Control"] == "no-cache"
+
+
+def _set_end(portal, room_id, minutes_from_now):
+    from datetime import datetime, timedelta
+    h = portal.holds.active(room_id)
+    h["end"] = (datetime.now(portal.tz) + timedelta(minutes=minutes_from_now)).isoformat()
+
+
+async def test_setpoint_starts_manual_heating_that_turns_off(env):
+    from datetime import datetime
+    fake, portal, guest, _ = env
+    await fake.set_state("climate.camera_102", "off", fake.states["climate.camera_102"]["attributes"])
+    await asyncio.sleep(0.1)
+    tok = portal.tokens.token_for("camera_102")
+    r = await guest.post(f"/camera/api/{tok}/setpoint", json={"temperature": 22})
+    assert r.status == 200
+    call = [c for c in fake.service_calls if c["service"] == "set_temperature"][-1]
+    assert call["service_data"] == {"temperature": 22, "hvac_mode": "heat"}  # switched on from off
+    hold = portal.holds.active("camera_102")
+    left = datetime.fromisoformat(hold["end"]) - datetime.now(portal.tz)
+    assert 119 * 60 < left.total_seconds() <= 120 * 60
+    data = await (await guest.get(f"/camera/api/{tok}")).json()
+    assert data["holds"][0]["active"] and data["hold_default_minutes"] == 120
+
+    _set_end(portal, "camera_102", -1)
+    await portal.process_holds()
+    await asyncio.sleep(0.1)
+    assert portal.holds.active("camera_102") is None
+    assert fake.states["climate.camera_102"]["state"] == "off"
+
+
+async def test_hold_actions(env):
+    from datetime import datetime, timedelta
+    fake, portal, guest, _ = env
+    tok = portal.tokens.token_for("camera_102")
+    url = f"/camera/api/{tok}/hold"
+    r = await guest.post(url, json={"action": "start", "minutes": 60, "temperature": 23})
+    assert r.status == 200
+    room = (await r.json())["room"]
+    h = room["holds"][0]
+    assert h["target"] == 23 and h["kind"] == "manual"
+    end1 = datetime.fromisoformat(h["end"])
+    r = await guest.post(url, json={"action": "extend", "minutes": 30})
+    end2 = datetime.fromisoformat((await r.json())["room"]["holds"][0]["end"])
+    assert end2 - end1 == timedelta(minutes=30)
+    target = (datetime.now(portal.tz) + timedelta(hours=3)).strftime("%H:%M")
+    r = await guest.post(url, json={"action": "until", "until": target})
+    assert (await r.json())["room"]["holds"][0]["end"][11:16] == target
+    r = await guest.post(url, json={"action": "extend", "minutes": 60 * 20})
+    assert r.status == 400 and (await r.json())["error"] == "too_long"
+    r = await guest.post(url, json={"action": "bogus"})
+    assert r.status == 400
+
+    await asyncio.sleep(3.1)  # rate limit between thermostat changes
+    r = await guest.post(url, json={"action": "stop"})
+    assert r.status == 200 and (await r.json())["room"]["holds"] == []
+    await asyncio.sleep(0.1)
+    assert fake.states["climate.camera_102"]["state"] == "off"
+
+    start = (datetime.now(portal.tz) + timedelta(hours=1)).strftime("%H:%M")
+    end = (datetime.now(portal.tz) + timedelta(hours=2)).strftime("%H:%M")
+    r = await guest.post(url, json={"action": "plan", "start": start, "until": end, "temperature": 21.5})
+    assert r.status == 200
+    planned = (await r.json())["room"]["holds"][0]
+    assert not planned["active"] and planned["kind"] == "planned"
+    r = await guest.post(url, json={"action": "plan", "start": start, "until": end})
+    assert (await r.json())["error"] == "overlap"
+
+    # The planned period starts: heating turns on at its temperature.
+    portal.holds.holds[0]["start"] = (datetime.now(portal.tz) - timedelta(seconds=5)).isoformat()
+    await portal.process_holds()
+    await asyncio.sleep(0.1)
+    assert portal.holds.active("camera_102")["id"] == planned["id"]
+    st = fake.states["climate.camera_102"]
+    assert st["state"] == "heat" and st["attributes"]["temperature"] == 21.5
+
+    r = await guest.post(url, json={"action": "plan", "start": start, "until": end})
+    pid = [h for h in (await r.json())["room"]["holds"] if not h["active"]][0]["id"]
+    r = await guest.post(url, json={"action": "cancel", "id": pid})
+    assert [h["id"] for h in (await r.json())["room"]["holds"]] == [planned["id"]]
+
+
+async def test_hold_end_keeps_heating_during_event(env):
+    fake, portal, guest, _ = env
+    # camera_204 is preconditioning for an event that starts in 29 min (lead 45 min).
+    tok = portal.tokens.token_for("camera_204")
+    r = await guest.post(f"/camera/api/{tok}/hold", json={"action": "start", "minutes": 30})
+    assert r.status == 200
+    _set_end(portal, "camera_204", -1)
+    await portal.process_holds()
+    await asyncio.sleep(0.1)
+    assert portal.holds.active("camera_204") is None
+    assert fake.states["climate.camera_204"]["state"] == "heat"
+    assert not [c for c in fake.service_calls if c["service"] == "set_hvac_mode"]
+
+
+async def test_hold_needs_pin(env):
+    _, portal, guest, admin = env
+    rid = "camera_102"
+    r = await admin.post(f"/api/rooms/{rid}/pin", json={"pin": "4321"})
+    assert r.status == 200
+    tok = portal.tokens.token_for(rid)
+    r = await guest.post(f"/camera/api/{tok}/hold", json={"action": "start"})
+    assert r.status == 401
