@@ -68,10 +68,20 @@ certificate files from `/ssl`, remove the `ssl_*` lines from `http:`, add
 `use_x_forwarded_for: true` and `trusted_proxies: [172.30.33.0/24]` under `http:`, restart HA,
 and forward the router's 443 to the HA Green's port 443.
 
-### With the Cloudflare Tunnel add-on
+### With the Cloudflared add-on (Cloudflare Tunnel)
 
-In the Cloudflare Zero Trust dashboard, add a second public hostname entry **above** the HA one:
-hostname `ha.voxdomini.ro`, path `camera/*`, service `http://<add-on hostname>:8080`.
+No NGINX needed. Set `trust_proxy_headers: true` in this add-on.
+
+- **Tunnel managed in the Cloudflare dashboard** (the Cloudflared add-on has `tunnel_token` set):
+  Zero Trust → Networks → Tunnels → your tunnel → Public Hostname → **Add a public hostname**:
+  subdomain `ha`, domain `voxdomini.ro`, path `camera/*`, service **HTTP** `172.30.32.1:8080`.
+  Make sure this entry is listed **above** the existing `ha.voxdomini.ro` entry (rules match top-down).
+- **Tunnel managed by the add-on itself** (no `tunnel_token`): the add-on cannot add a path rule on the
+  HA hostname. Use a subdomain instead, in the Cloudflared add-on options:
+  `additional_hosts: [{hostname: camera.voxdomini.ro, service: "http://172.30.32.1:8080"}]`,
+  and set this add-on's `public_url` to `https://camera.voxdomini.ro`.
+
+`172.30.32.1` is the HA host as seen from add-ons, where port 8080 of this add-on is published.
 
 ### With Nabu Casa remote access
 
