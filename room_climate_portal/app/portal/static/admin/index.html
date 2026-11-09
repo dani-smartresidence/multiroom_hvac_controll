@@ -33,5 +33,14 @@
     <tbody></tbody>
   </table>
 </main>
+<div class="dlg-back" id="dlg" hidden>
+  <form class="dlg" id="dlg-form" autocomplete="off">
+    <h3 id="dlg-title"></h3>
+    <p id="dlg-text"></p>
+    <input id="dlg-input" type="password" inputmode="numeric" maxlength="8" placeholder="PIN" aria-label="PIN">
+    <div class="dlg-err" id="dlg-err" role="alert"></div>
+    <div class="dlg-btns"><button type="button" id="dlg-cancel">Cancel</button><button type="submit" id="dlg-ok" class="primary">OK</button></div>
+  </form>
+</div>
 </body>
 </html>

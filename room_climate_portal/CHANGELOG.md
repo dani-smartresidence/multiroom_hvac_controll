@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.1
+- Admin page: Set PIN, PIN for all rooms, Remove PIN and New QR code now use an in-page dialog.
+  Browser pop-ups are blocked inside the HA panel and the HA mobile app, so those buttons did nothing before.
+
 ## 0.2.0
 - All guest pages and APIs live under `base_path` (default `/camera`), so they can be published on the
   same domain and port as HA: `https://ha.example.ro/camera/<code>`. **QR codes change format: reprint them.**

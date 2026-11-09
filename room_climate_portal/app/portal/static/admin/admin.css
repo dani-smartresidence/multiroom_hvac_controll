@@ -25,3 +25,12 @@ code,.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12p
 .dot.on{background:var(--ok)}
 @media (max-width:900px){thead{display:none}table,tbody,tr,td{display:block;width:100%}tr{border-bottom:1px solid var(--line)}td{border:0;padding:6px 12px}}
 .btns{display:flex;flex-direction:column;gap:6px;margin-top:6px;align-items:flex-start}
+[hidden]{display:none!important}
+.danger{background:#C2410C;border-color:#C2410C;color:#fff}
+.dlg-back{position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;padding:16px;z-index:10}
+.dlg{background:var(--card);color:var(--ink);border:1px solid var(--line);border-radius:16px;padding:20px;width:100%;max-width:380px;box-shadow:0 20px 50px rgba(0,0,0,.3)}
+.dlg h3{margin:0 0 6px;font-size:17px}
+.dlg p{margin:0 0 12px;color:var(--muted)}
+.dlg input{width:100%;font:inherit;font-size:22px;letter-spacing:.4em;text-align:center;padding:10px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--ink)}
+.dlg-err{min-height:18px;margin:8px 0;color:var(--warn);font-weight:600;font-size:13px}
+.dlg-btns{display:flex;justify-content:flex-end;gap:8px}

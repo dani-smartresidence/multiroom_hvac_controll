@@ -1,5 +1,5 @@
 name: Room Climate Portal
-version: "0.2.0"
+version: "0.2.1"
 slug: room_climate_portal
 description: Per-room thermostat pages opened by scanning a QR code in each room
 url: https://github.com/dani-smartresidence/multiroom_hvac_controll

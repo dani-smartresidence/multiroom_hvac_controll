@@ -53,41 +53,87 @@
     });
   }
 
-  function askPin(label) {
-    var pin = prompt(label + "\nEnter a 4-8 digit PIN (leave empty to remove the PIN):", "");
-    if (pin === null) return null;
-    pin = pin.trim();
-    if (pin && !/^\d{4,8}$/.test(pin)) { alert("The PIN must be 4 to 8 digits."); return null; }
-    return { pin: pin || null };
+  // In-page dialog. Browser prompt()/confirm() are blocked inside the HA Ingress
+  // panel and the HA mobile app, so nothing here relies on them.
+  function dialog(opts) {
+    var d = $("#dlg");
+    $("#dlg-title").textContent = opts.title;
+    $("#dlg-text").textContent = opts.text || "";
+    $("#dlg-err").textContent = "";
+    var input = $("#dlg-input");
+    input.hidden = !opts.input;
+    input.value = "";
+    var ok = $("#dlg-ok");
+    ok.textContent = opts.okLabel || "OK";
+    ok.className = opts.danger ? "danger" : "primary";
+    ok.disabled = false;
+    d.hidden = false;
+    if (opts.input) setTimeout(function () { input.focus(); }, 30);
+    function close() { d.hidden = true; ok.onclick = null; $("#dlg-cancel").onclick = null; $("#dlg-form").onsubmit = null; }
+    $("#dlg-cancel").onclick = close;
+    $("#dlg-form").onsubmit = function (ev) {
+      ev.preventDefault();
+      var value = input.value.trim();
+      var err = opts.validate ? opts.validate(value) : null;
+      if (err) { $("#dlg-err").textContent = err; return; }
+      ok.disabled = true;
+      opts.onOk(value).then(function (failure) {
+        ok.disabled = false;
+        if (failure) { $("#dlg-err").textContent = failure; return; }
+        close();
+        load();
+      });
+    };
   }
+
   function postJson(url, body) {
     return fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })
-      .then(function (r) { if (!r.ok) return r.text().then(function (t) { alert("Failed: " + t); }); });
+      .then(function (r) {
+        if (r.ok) return null;
+        return r.text().then(function (t) {
+          try { return JSON.parse(t).error || t; } catch (e) { return t || ("HTTP " + r.status); }
+        });
+      })
+      .catch(function () { return "Cannot reach the add-on."; });
   }
+
+  function validPin(v) { return /^\d{4,8}$/.test(v) ? null : "The PIN must be 4 to 8 digits."; }
 
   document.addEventListener("click", function (ev) {
     var p = ev.target.closest("[data-pin]");
     if (p) {
-      var v = askPin("PIN for room " + p.getAttribute("data-pin") + ".");
-      if (v) postJson("api/rooms/" + encodeURIComponent(p.getAttribute("data-pin")) + "/pin", v).then(load);
-      return;
+      var rid = p.getAttribute("data-pin");
+      return dialog({
+        title: "PIN for " + rid, text: "4 to 8 digits. Phones that already unlocked this room must enter the new PIN.",
+        input: true, okLabel: "Save PIN", validate: validPin,
+        onOk: function (v) { return postJson("api/rooms/" + encodeURIComponent(rid) + "/pin", { pin: v }); }
+      });
     }
     var n = ev.target.closest("[data-nopin]");
     if (n) {
-      if (confirm("Remove the PIN for " + n.getAttribute("data-nopin") + "? Anyone with the QR code can then change the temperature.")) {
-        postJson("api/rooms/" + encodeURIComponent(n.getAttribute("data-nopin")) + "/pin", { pin: null }).then(load);
-      }
-      return;
+      var nid = n.getAttribute("data-nopin");
+      return dialog({
+        title: "Remove the PIN for " + nid + "?", text: "Anyone with the room's QR code can then change its temperature.",
+        okLabel: "Remove PIN", danger: true,
+        onOk: function () { return postJson("api/rooms/" + encodeURIComponent(nid) + "/pin", { pin: null }); }
+      });
     }
     var b = ev.target.closest("[data-rotate]");
     if (!b) return;
     var id = b.getAttribute("data-rotate");
-    if (!confirm("Replace the QR code for " + id + "? The printed code stops working immediately.")) return;
-    fetch("api/rooms/" + encodeURIComponent(id) + "/rotate", { method: "POST" }).then(load);
+    dialog({
+      title: "Replace the QR code for " + id + "?", text: "The printed code stops working immediately. Print the new one afterwards.",
+      okLabel: "Replace code", danger: true,
+      onOk: function () { return postJson("api/rooms/" + encodeURIComponent(id) + "/rotate", {}); }
+    });
   });
   $("#pin-all").addEventListener("click", function () {
-    var v = askPin("Same PIN for ALL rooms (replaces every room's PIN).");
-    if (v) postJson("api/pin_all", v).then(load);
+    dialog({
+      title: "Same PIN for all rooms", text: "Replaces every room's PIN. Leave empty to remove the PIN from all rooms.",
+      input: true, okLabel: "Apply to all rooms",
+      validate: function (v) { return v === "" ? null : validPin(v); },
+      onOk: function (v) { return postJson("api/pin_all", { pin: v || null }); }
+    });
   });
   $("#reload").addEventListener("click", function () {
     this.disabled = true;
