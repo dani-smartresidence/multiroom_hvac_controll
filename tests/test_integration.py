@@ -339,3 +339,39 @@ async def test_admin_sets_temperature_and_mode(env):
     # Guests still cannot change the mode.
     tok = portal.tokens.token_for("camera_204")
     assert (await guest.post(f"/camera/api/{tok}/mode", json={"hvac_mode": "heat"})).status == 403
+
+
+async def test_timer_end_restores_admin_settings(env):
+    fake, portal, guest, admin = env
+    await admin.post("/api/rooms/camera_102/temperature", json={"temperature": 19})
+    row = await (await admin.post("/api/rooms/camera_102/mode", json={"hvac_mode": "heat"})).json()
+    assert row["default"] == {"hvac_mode": "heat", "temperature": 19}
+    tok = portal.tokens.token_for("camera_102")
+    await guest.post(f"/camera/api/{tok}/hold", json={"action": "start", "minutes": 60, "temperature": 23})
+    await asyncio.sleep(0.1)
+    assert fake.states["climate.camera_102"]["attributes"]["temperature"] == 23
+    _set_end(portal, "camera_102", -1)
+    await portal.process_holds()
+    await asyncio.sleep(0.1)
+    st = fake.states["climate.camera_102"]
+    assert st["state"] == "heat" and st["attributes"]["temperature"] == 19
+    assert portal.audit.tail(1)[0]["action"] == "restore_default"
+
+
+async def test_event_end_restores_admin_settings(env):
+    from datetime import datetime, timedelta
+    fake, portal, _, admin = env
+    await admin.post("/api/rooms/camera_204/temperature", json={"temperature": 18})
+    await admin.post("/api/rooms/camera_204/mode", json={"hvac_mode": "off"})
+    await fake.set_state("climate.camera_204", "heat", fake.states["climate.camera_204"]["attributes"])  # event heating
+    await asyncio.sleep(0.1)
+    now = datetime.now(portal.tz)
+    await portal.process_holds()  # the first event is preconditioning now: it is tracked
+    assert portal.schedules["camera_204"][0]["summary"] in [k[2] for k in portal._running_events]
+    assert fake.states["climate.camera_204"]["state"] == "heat"  # nothing changes while it runs
+    ev = portal.schedules["camera_204"][0]
+    ev["end"] = (now - timedelta(seconds=1)).isoformat()
+    await portal.process_holds()
+    await asyncio.sleep(0.1)
+    assert fake.states["climate.camera_204"]["state"] == "off"
+    assert not portal._running_events

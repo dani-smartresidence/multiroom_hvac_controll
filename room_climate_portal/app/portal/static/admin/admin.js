@@ -81,7 +81,10 @@
       return '<option value="' + esc(m) + '"' + (m === r.hvac_mode ? " selected" : "") + ">" + esc(MODE_LABEL[m] || m) + "</option>";
     }).join("");
     var sel = modes ? '<select class="mode" data-mode="' + esc(r.id) + '" aria-label="Mode">' + modes + "</select>" : "";
-    return now + stepper + sel;
+    var d = r.default, after;
+    if (d && d.hvac_mode) after = "After events &amp; timers: <b>" + esc(MODE_LABEL[d.hvac_mode] || d.hvac_mode) + "</b>" + (d.hvac_mode !== "off" && d.temperature != null ? " · <b>" + num(d.temperature) + " °C</b>" : "");
+    else after = "After events &amp; timers: " + (r.fallback === "setback" ? "setback " + num(r.setback_temp) + " °C" : "Off") + " <span class=\"muted\">(not set here yet)</span>";
+    return now + stepper + sel + '<div class="after">' + after + "</div>";
   }
   function roomById(id) { return ROOMS.filter(function (r) { return r.id === id; })[0]; }
   function replaceRoom(updated) {
@@ -191,6 +194,7 @@
           : a.action === "heating_plan_cancelled" ? "Planned period removed"
           : a.action === "heating_off" ? "Heating turned off (" + esc(a.reason) + ")"
           : a.action === "setback" ? "Setback to " + num(a.new) + " °C (" + esc(a.reason) + ")"
+          : a.action === "restore_default" ? "Back to room settings: " + esc(MODE_LABEL[a.mode] || a.mode) + (a.mode !== "off" && a.new != null ? " " + num(a.new) + " °C" : "") + " (" + esc(String(a.reason).replace("_", " ")) + ")"
           : a.action === "hold_end_kept_for_event" ? "Manual heating ended, kept on for event"
           : esc(a.action) + " " + esc(a.new || "");
         return "<tr data-room=\"" + esc(a.room) + "\"><td>" + new Date(a.ts * 1000).toLocaleString([], { timeZone: TZ }) + "</td><td>" + esc(a.room) + "</td><td>" + change + "</td><td class=\"mono\">" + esc(a.client) + "</td></tr>";

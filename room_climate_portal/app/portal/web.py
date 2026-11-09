@@ -327,6 +327,9 @@ def build_admin_app(portal: Portal) -> web.Application:
             "custom_code": portal.tokens.is_custom(rid),
             "hold": next((h for h in snap["holds"] if h["active"]), None),
             "planned": len([h for h in snap["holds"] if not h["active"]]),
+            "default": portal.defaults.get(rid),
+            "fallback": portal.options.hold_end_action,
+            "setback_temp": portal.options.setback_temp,
         }
 
     def get_room(request) -> str:

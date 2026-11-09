@@ -12,7 +12,7 @@ from .audit import AuditLog
 from .config import Options, Paths
 from .ha import HAClient, HAError
 from .pins import PinStore
-from .holds import HoldError, HoldStore, parse_hhmm
+from .holds import DefaultsStore, HoldError, HoldStore, parse_hhmm
 from .rooms import Room, clamp_setpoint, discover, load_overrides
 from .schedule import build_events, lead_minutes_from_state, next_precondition
 from .tokens import TokenStore
@@ -27,6 +27,15 @@ REGISTRY_EVENTS = (
     "label_registry_updated",
     "floor_registry_updated",
 )
+
+
+def modes_of(attrs: dict) -> list:
+    return attrs.get("hvac_modes") or []
+
+
+def room_id_has_schedule(schedules: dict, room_id: str) -> bool:
+    """True once the room's calendar was read, so a missing event really was removed."""
+    return room_id in schedules
 
 
 class RateLimited(Exception):
@@ -60,6 +69,8 @@ class Portal:
         self._published: dict[str, tuple] = {}
         self.ready = False
         self.holds = HoldStore(paths.holds)
+        self.defaults = DefaultsStore(paths.defaults)
+        self._running_events: dict[tuple, dict] = {}  # (room, start, summary) -> event, while it heats
         ha.on_connect = self._on_connect
         ha.on_disconnect = self._on_disconnect
 
@@ -329,11 +340,13 @@ class Portal:
             self._check_rate(room_id, client)
         old = attrs.get("temperature")
         data: dict = {"temperature": target}
-        mode = self._heat_mode(room)
-        if mode:  # thermostat is off: a change from the page switches heating on
+        mode = None if admin else self._heat_mode(room)
+        if mode:  # thermostat is off: a change from the guest page switches heating on
             data["hvac_mode"] = mode
         await self.ha.call_service("climate", "set_temperature", data, entity_id=room.climate)
         self.audit.write(room=room_id, action="set_temperature", old=old, new=target, client=client)
+        if admin:
+            self.defaults.update(room_id, temperature=target, hvac_mode=st.get("state") if st.get("state") in modes_of(attrs) else None)
         hold = self.holds.active(room_id)
         if hold:
             hold["target"] = target
@@ -395,8 +408,26 @@ class Portal:
         if self._event_running(room.id, now):
             self.audit.write(room=room.id, action="hold_end_kept_for_event", client="timer")
             return
+        await self._restore(room, reason)
+
+    async def _restore(self, room: Room, reason: str) -> None:
+        """Back to the room's admin-page settings; without any, off or setback per the options."""
         st = self.states.get(room.climate or "") or {}
-        modes = (st.get("attributes") or {}).get("hvac_modes") or []
+        default = self.defaults.get(room.id)
+        if default and default.get("hvac_mode") in modes_of(st.get("attributes") or {}):
+            mode, temp = default["hvac_mode"], default.get("temperature")
+            if mode == "off":
+                await self.ha.call_service("climate", "set_hvac_mode", {"hvac_mode": "off"}, entity_id=room.climate)
+            else:
+                data: dict = {"hvac_mode": mode}
+                if isinstance(temp, (int, float)):
+                    data["temperature"] = clamp_setpoint(room, temp, st.get("attributes") or {})
+                    await self.ha.call_service("climate", "set_temperature", data, entity_id=room.climate)
+                else:
+                    await self.ha.call_service("climate", "set_hvac_mode", data, entity_id=room.climate)
+            self.audit.write(room=room.id, action="restore_default", new=temp, mode=mode, reason=reason, client="timer")
+            return
+        modes = modes_of(st.get("attributes") or {})
         if self.options.hold_end_action == "off" and "off" in modes:
             await self.ha.call_service("climate", "set_hvac_mode", {"hvac_mode": "off"}, entity_id=room.climate)
             self.audit.write(room=room.id, action="heating_off", reason=reason, client="timer")
@@ -515,6 +546,34 @@ class Portal:
                 changed = True
             if changed:
                 self.broadcast(room.id, {"type": "room", "room": self.snapshot(room.id)})
+        if self.options.restore_after_events:
+            await self._process_event_ends(now)
+
+    async def _process_event_ends(self, now: datetime) -> None:
+        """When a calendar event's heating ends (or the event is removed), go back to the room defaults."""
+        current: dict[tuple, dict] = {}
+        for room_id, events in self.schedules.items():
+            for ev in events:
+                if ev["all_day"]:
+                    continue
+                key = (room_id, ev["start"], ev["summary"])
+                current[key] = ev
+                if datetime.fromisoformat(ev["precondition_start"] or ev["start"]) <= now < datetime.fromisoformat(ev["end"]):
+                    self._running_events[key] = ev
+        for key, ev in list(self._running_events.items()):
+            latest = current.get(key, ev)
+            ended = now >= datetime.fromisoformat(latest["end"])
+            removed = key not in current and room_id_has_schedule(self.schedules, key[0])
+            if not (ended or removed):
+                continue
+            del self._running_events[key]
+            room = self.rooms.get(key[0])
+            if room is None or not room.climate:
+                continue
+            if self.holds.active(room.id) or self._event_running(room.id, now):
+                continue  # manual heating or the next event takes over
+            await self._restore(room, "event_end" if ended else "event_removed")
+            self.broadcast(room.id, {"type": "room", "room": self.snapshot(room.id)})
 
     async def set_mode(self, room_id: str, mode: str, client: str, admin: bool = False) -> str:
         room = self.rooms[room_id]
@@ -528,6 +587,9 @@ class Portal:
             self._check_rate(room_id, client)
         await self.ha.call_service("climate", "set_hvac_mode", {"hvac_mode": mode}, entity_id=room.climate)
         self.audit.write(room=room_id, action="set_hvac_mode", old=st.get("state"), new=mode, client=client)
+        if admin:
+            target = (st.get("attributes") or {}).get("temperature")
+            self.defaults.update(room_id, hvac_mode=mode, temperature=target if isinstance(target, (int, float)) else None)
         active = self.holds.active(room_id)
         if mode == "off" and active:
             self.holds.remove(active["id"])

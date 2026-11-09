@@ -38,6 +38,32 @@ def parse_hhmm(value: str, now: datetime, tz: ZoneInfo, *, after: datetime | Non
     return dt
 
 
+class DefaultsStore:
+    """Per-room default thermostat settings chosen on the admin page: {room: {"hvac_mode", "temperature"}}."""
+
+    def __init__(self, path: Path):
+        self._path = path
+        self.data: dict[str, dict] = {}
+        if path.exists():
+            try:
+                self.data = json.loads(path.read_text(encoding="utf-8"))
+            except ValueError:
+                self.data = {}
+
+    def get(self, room_id: str) -> dict | None:
+        return self.data.get(room_id)
+
+    def update(self, room_id: str, **values) -> dict:
+        entry = dict(self.data.get(room_id) or {})
+        entry.update({k: v for k, v in values.items() if v is not None})
+        self.data[room_id] = entry
+        self._path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = self._path.with_suffix(".tmp")
+        tmp.write_text(json.dumps(self.data, indent=2), encoding="utf-8")
+        tmp.replace(self._path)
+        return entry
+
+
 class HoldStore:
     def __init__(self, path: Path):
         self._path = path

@@ -40,6 +40,7 @@ class Options:
     hold_max_hours: int = 12
     hold_end_action: str = "off"
     setback_temp: float = 16.0
+    restore_after_events: bool = True
 
     @classmethod
     def load(cls, path: Path) -> "Options":
@@ -75,6 +76,10 @@ class Paths:
     @property
     def holds(self) -> Path:
         return self.data / "holds.json"
+
+    @property
+    def defaults(self) -> Path:
+        return self.data / "room_defaults.json"
 
     @property
     def pins(self) -> Path:

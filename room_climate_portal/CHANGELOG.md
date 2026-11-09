@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.0
+- The temperature and mode set on the admin page become the room's settings. After every manual period,
+  planned period and calendar event (also when an event is deleted while it runs) the thermostat goes back to them.
+  Shown per room as "After events & timers: …".
+- Rooms without admin settings: off or setback, as before (`hold_end_action`). New option `restore_after_events` (on).
+- Changing the temperature on the admin page no longer switches an "off" thermostat on; use the mode menu.
+
 ## 0.4.2
 - Admin page: set each room's target temperature (− / +) and climate mode (Off, Heat, …) right in the room list.
   Staff changes have no rate limit and no auto-off timer; they are logged as "admin" in Recent changes.

@@ -113,9 +113,17 @@ Rooms without a calendar event can still be heated from the room page:
   `hold_max_hours` (12 h).
 - **Plan a period**: from–until hours within the next 24 h, with its own temperature (up to 4 per room).
   It turns on and off by itself and shows on the Program page.
-- At the end the thermostat is turned off (`hold_end_action: off`) or set to `setback_temp`
-  (`hold_end_action: setback`). If a calendar event is preconditioning or running in that room at that
-  moment, nothing is changed, so the event keeps its heating.
+- At the end the thermostat goes back to the **room settings from the admin page** (see below). If a
+  calendar event is preconditioning or running in that room at that moment, nothing is changed, so the
+  event keeps its heating.
+
+### Room settings (admin page)
+
+The temperature and mode you set for a room on the admin page are remembered as that room's settings.
+Whenever a manual period, a planned period or a calendar event ends (or an event is deleted while it runs),
+the thermostat goes back to them, e.g. *Off*, or *Heat 18 °C*. Rooms you never set there are turned off
+(`hold_end_action: off`) or set to `setback_temp` (`hold_end_action: setback`). Turn
+`restore_after_events` off if your own automations already handle the end of events.
 
 Periods are stored in `/data/holds.json` and survive restarts and updates.
 
