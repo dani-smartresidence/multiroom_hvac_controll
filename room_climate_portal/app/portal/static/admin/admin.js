@@ -67,7 +67,7 @@
   });
 
   // ------------------------------------------------------------ thermostat control
-  var PENDING = {}, TIMERS = {};
+  var PENDING = {}, TIMERS = {}, OPEN = {};
   var MODE_LABEL = { off: "Off", heat: "Heat", cool: "Cool", auto: "Auto", heat_cool: "Heat / cool", dry: "Dry", fan_only: "Fan" };
   function climateCell(r) {
     var now = '<div class="now">Now <b>' + num(r.current) + " °C</b>" + (r.hvac_action ? ' <span class="muted">· ' + esc(r.hvac_action) + "</span>" : "") + "</div>";
@@ -84,7 +84,7 @@
     var d = r.default, after;
     if (d && d.hvac_mode) after = "After events &amp; timers: <b>" + esc(MODE_LABEL[d.hvac_mode] || d.hvac_mode) + "</b>" + (d.hvac_mode !== "off" && d.temperature != null ? " · <b>" + num(d.temperature) + " °C</b>" : "");
     else after = "After events &amp; timers: " + (r.fallback === "setback" ? "setback " + num(r.setback_temp) + " °C" : "Off") + " <span class=\"muted\">(not set here yet)</span>";
-    return now + stepper + sel + '<div class="after">' + after + "</div>";
+    return now + '<div class="tctl">' + stepper + sel + "</div>" + '<div class="after">' + after + "</div>";
   }
   function roomById(id) { return ROOMS.filter(function (r) { return r.id === id; })[0]; }
   function replaceRoom(updated) {
@@ -146,17 +146,21 @@
   function row(r) {
     var issues = (r.issues || []).map(function (i) { return '<span class="issue">' + esc(i) + "</span>"; }).join(" ");
     var ev = r.next_event;
-    return "<tr data-id=\"" + esc(r.id) + "\">" +
-      "<td><b>" + esc(r.name) + "</b><div class=\"muted\">" + esc(r.subtitle) + "</div><div class=\"mono muted\">" + esc(r.id) + "</div>" + (issues ? "<div>" + issues + "</div>" : "") + "</td>" +
-      "<td class=\"mono\">" + esc(r.climate || "–") + "<div class=\"muted\">" + esc(r.hvac_mode || "") + " · " + num(r.min_temp) + "–" + num(r.max_temp) + " °C</div></td>" +
-      "<td>" + climateCell(r) +
+    var open = OPEN[r.id];
+    return "<tr data-id=\"" + esc(r.id) + "\"" + (open ? ' class="open"' : "") + ">" +
+      "<td class=\"c-room\"><div class=\"rhead\"><div><b class=\"rname\">" + esc(r.name) + "</b><div class=\"muted\">" + esc(r.subtitle) +
+        '<span class="m-only"> · ' + (r.pin_enabled ? "PIN on" : "no PIN") + "</span></div><div class=\"mono muted d-only\">" + esc(r.id) + "</div></div>" +
+        '<button type="button" class="more m-only" data-more="' + esc(r.id) + '" aria-expanded="' + (open ? "true" : "false") + '">' + (open ? "Less ▴" : "Details ▾") + "</button></div>" +
+        (issues ? "<div>" + issues + "</div>" : "") + "</td>" +
+      "<td class=\"mono c-x\"><div class=\"mlbl\">Thermostat</div>" + esc(r.climate || "–") + "<div class=\"muted\">" + esc(r.hvac_mode || "") + " · " + num(r.min_temp) + "–" + num(r.max_temp) + " °C</div></td>" +
+      "<td class=\"c-temp\">" + climateCell(r) +
         (r.hold ? '<div class="hold">Manual until ' + hm(r.hold.end) + "</div>" : "") +
         (r.planned ? '<div class="muted">' + r.planned + " planned</div>" : "") + "</td>" +
-      "<td class=\"mono\">" + esc(r.calendar || "–") + "<div>" + esc(r.lead_time || "default") + " → " + esc(r.lead_minutes) + " min</div></td>" +
-      "<td>" + (ev ? esc(ev.summary) + "<div class=\"muted\">" + time(ev.start) + "</div><div class=\"muted\">precondition " + time(ev.precondition_start) + "</div>" : "<span class=\"muted\">none</span>") + "</td>" +
-      "<td><a href=\"print?room=" + encodeURIComponent(r.id) + "\" target=\"_blank\" rel=\"noopener\"><img class=\"qr\" alt=\"QR\" src=\"qr/" + encodeURIComponent(r.id) + ".svg?g=" + r.generation + "\"></a>" +
+      "<td class=\"mono c-x\"><div class=\"mlbl\">Calendar &amp; lead time</div>" + esc(r.calendar || "–") + "<div>" + esc(r.lead_time || "default") + " → " + esc(r.lead_minutes) + " min</div></td>" +
+      "<td class=\"c-x\"><div class=\"mlbl\">Next event</div>" + (ev ? esc(ev.summary) + "<div class=\"muted\">" + time(ev.start) + "</div><div class=\"muted\">precondition " + time(ev.precondition_start) + "</div>" : "<span class=\"muted\">none</span>") + "</td>" +
+      "<td class=\"c-x c-qr\"><div class=\"mlbl\">QR code</div><a href=\"print?room=" + encodeURIComponent(r.id) + "\" target=\"_blank\" rel=\"noopener\"><img class=\"qr\" alt=\"QR\" src=\"qr/" + encodeURIComponent(r.id) + ".svg?g=" + r.generation + "\"></a>" +
       "<div class=\"url\">" + esc(r.url) + (r.custom_code ? " <b>(custom)</b>" : "") + "</div><div class=\"muted\">" + r.open_pages + " open now</div></td>" +
-      "<td><div>" + (r.pin_enabled ? "<b>On</b>" : "<span class=\"muted\">Off</span>") + "</div>" +
+      "<td class=\"c-x\"><div class=\"mlbl\">PIN &amp; code</div><div>" + (r.pin_enabled ? "<b>On</b>" : "<span class=\"muted\">Off</span>") + "</div>" +
       "<div class=\"btns\"><button class=\"small\" data-pin=\"" + esc(r.id) + "\">" + (r.pin_enabled ? "Change PIN" : "Set PIN") + "</button>" +
       (r.pin_enabled ? "<button class=\"small\" data-nopin=\"" + esc(r.id) + "\">Remove PIN</button>" : "") +
       "<button class=\"small\" data-code=\"" + esc(r.id) + "\" data-current=\"" + esc(r.custom_code ? r.url.split("/").pop() : "") + "\">Custom code</button>" +
@@ -197,7 +201,7 @@
           : a.action === "restore_default" ? "Back to room settings: " + esc(MODE_LABEL[a.mode] || a.mode) + (a.mode !== "off" && a.new != null ? " " + num(a.new) + " °C" : "") + " (" + esc(String(a.reason).replace("_", " ")) + ")"
           : a.action === "hold_end_kept_for_event" ? "Manual heating ended, kept on for event"
           : esc(a.action) + " " + esc(a.new || "");
-        return "<tr data-room=\"" + esc(a.room) + "\"><td>" + new Date(a.ts * 1000).toLocaleString([], { timeZone: TZ }) + "</td><td>" + esc(a.room) + "</td><td>" + change + "</td><td class=\"mono\">" + esc(a.client) + "</td></tr>";
+        return "<tr data-room=\"" + esc(a.room) + "\"><td class=\"a-time\">" + new Date(a.ts * 1000).toLocaleString([], { timeZone: TZ, dateStyle: "short", timeStyle: "short" }) + "</td><td class=\"a-room\">" + esc(a.room) + "</td><td class=\"a-change\">" + change + "</td><td class=\"mono a-client\">" + esc(a.client) + "</td></tr>";
       }).join("") || '<tr><td colspan="4" class="muted">No changes yet.</td></tr>';
       renderRooms();
     });
@@ -255,6 +259,8 @@
   function validPin(v) { return /^\d{4,8}$/.test(v) ? null : "The PIN must be 4 to 8 digits."; }
 
   document.addEventListener("click", function (ev) {
+    var mb = ev.target.closest("button[data-more]");
+    if (mb) { var mid = mb.getAttribute("data-more"); OPEN[mid] = !OPEN[mid]; return renderRooms(); }
     var tb = ev.target.closest("button[data-temp]");
     if (tb) return stepTemp(tb.getAttribute("data-temp"), parseInt(tb.getAttribute("data-dir"), 10));
     if (ev.target.id === "clear") {

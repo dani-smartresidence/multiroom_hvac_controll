@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.1
+- Admin page on phones (HA app): one card per room with large − / + buttons and the mode menu up front,
+  a "Details" button for thermostat, calendar, next event, QR code and PIN/code actions, a sticky search
+  bar with swipeable filters, compact "Recent changes", and dialogs as bottom sheets.
+
 ## 0.5.0
 - The temperature and mode set on the admin page become the room's settings. After every manual period,
   planned period and calendar event (also when an event is deleted while it runs) the thermostat goes back to them.
