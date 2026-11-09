@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="ro">
+<head>
+<meta charset="utf-8">
+<title>Coduri QR camere</title>
+<style>
+@page{size:A4;margin:12mm}
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color:#1D1F23;background:#fff}
+.bar{padding:12px 0 16px;display:flex;justify-content:space-between;align-items:center}
+.bar button{font:inherit;font-weight:600;padding:8px 14px;border-radius:10px;border:0;background:#E8692E;color:#fff;cursor:pointer}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8mm}
+.card{border:1px dashed #BDB7AD;border-radius:6mm;padding:6mm 5mm;text-align:center;break-inside:avoid;page-break-inside:avoid}
+.qr svg{width:42mm;height:42mm;display:block;margin:0 auto}
+.name{font-size:16pt;font-weight:700;margin-top:3mm}
+.sub{font-size:9pt;color:#6B6F76;min-height:11pt}
+.hint{font-size:9pt;margin-top:2mm}
+.hint span{color:#6B6F76;font-size:8pt}
+@media print{.bar{display:none}}
+</style>
+</head>
+<body>
+<div class="bar"><span>Decupați pe linia punctată · Cut along the dashed line</span><button type="button" onclick="window.print()">Print</button></div>
+<div class="grid">
+__CARDS__
+</div>
+</body>
+</html>

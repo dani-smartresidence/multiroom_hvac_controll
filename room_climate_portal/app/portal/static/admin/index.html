@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Room QR admin</title>
+<link rel="stylesheet" href="static/admin.css">
+<script src="static/admin.js" defer></script>
+</head>
+<body>
+<header class="top">
+  <div>
+    <h1>Room QR codes</h1>
+    <p class="sub" id="status">Loading…</p>
+  </div>
+  <div class="actions">
+    <button type="button" id="reload">Re-scan rooms</button>
+    <a class="button primary" href="print" target="_blank" rel="noopener">Print all QR codes</a>
+  </div>
+</header>
+<main>
+  <table id="rooms">
+    <thead><tr><th>Room</th><th>Thermostat</th><th>Now / target</th><th>Calendar &amp; lead time</th><th>Next event</th><th>QR code</th><th></th></tr></thead>
+    <tbody></tbody>
+  </table>
+  <p class="empty" id="empty" hidden>No rooms found. Put the label <code id="label"></code> on each room's Area in Home Assistant (Settings → Areas), or list rooms in <code>/addon_configs/…room_climate_portal/rooms.yaml</code>, then press “Re-scan rooms”.</p>
+
+  <h2>Recent changes</h2>
+  <table id="audit">
+    <thead><tr><th>Time</th><th>Room</th><th>Change</th><th>Phone</th></tr></thead>
+    <tbody></tbody>
+  </table>
+</main>
+</body>
+</html>

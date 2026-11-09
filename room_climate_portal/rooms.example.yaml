@@ -1,0 +1,20 @@
+# Copy to /addon_configs/<id>_room_climate_portal/rooms.yaml (File editor / Samba / SSH)
+# and press "Re-scan rooms" on the add-on's admin page.
+# Keys are HA Area ids. Every field is optional; anything left out is auto-discovered.
+rooms:
+  camera_204:
+    name: Camera 204
+    subtitle: Etaj 2 · Sală conferințe
+    climate: climate.camera_204
+    calendar: calendar.camera_204
+    lead_time: input_number.camera_204_precondition_minutes
+    humidity: sensor.camera_204_humidity
+    min_temp: 18
+    max_temp: 25
+    step: 0.5
+    allow_mode_change: false
+  # A room without a labelled area can be defined entirely here:
+  sala_mare:
+    name: Sala mare
+    climate: climate.sala_mare
+    calendar: calendar.sala_mare

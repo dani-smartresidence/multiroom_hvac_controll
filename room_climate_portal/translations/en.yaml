@@ -1,0 +1,52 @@
+configuration:
+  public_url:
+    name: Public URL
+    description: Base address phones use to reach the guest port (printed into the QR codes), e.g. https://climate.example.ro
+  default_language:
+    name: Default page language
+    description: Language the room page opens in. Guests can switch between Romanian and English.
+  room_label:
+    name: Room label
+    description: HA label put on each Area that should get a QR page.
+  lead_time_label:
+    name: Lead-time label
+    description: HA label on the entity (sensor / input_number) that holds the precondition lead time in minutes for that room.
+  outdoor_sensor:
+    name: Outdoor temperature sensor
+    description: Optional sensor shown as "Exterior" on every room page.
+  min_temp:
+    name: Minimum setpoint
+    description: Lowest temperature guests may set (°C). Can be overridden per room.
+  max_temp:
+    name: Maximum setpoint
+    description: Highest temperature guests may set (°C). Can be overridden per room.
+  temp_step:
+    name: Setpoint step
+    description: Step of the + / - buttons (°C).
+  default_target_temp:
+    name: Default event target
+    description: Target temperature shown for an event when its description has no "target:" line.
+  default_lead_minutes:
+    name: Default lead time
+    description: Minutes used when a room has no lead-time entity.
+  schedule_days:
+    name: Days of schedule
+    description: How many days ahead the room page lists events.
+  allow_mode_change:
+    name: Allow mode change
+    description: Let guests change HVAC mode (otherwise only the setpoint).
+  publish_precondition_sensors:
+    name: Publish precondition sensors
+    description: Create sensor.<room>_next_precondition (timestamp) in HA so automations can start preconditioning at exactly the time the page shows.
+  rate_limit_seconds:
+    name: Seconds between changes per room
+  max_changes_per_hour:
+    name: Max changes per hour per phone
+  trust_proxy_headers:
+    name: Trust X-Forwarded-For
+    description: Enable only when the guest port sits behind your own reverse proxy.
+  help_text:
+    name: Help text
+    description: Shown on the "code no longer active" page, e.g. "Întrebați la recepție sau sunați la interiorul 100."
+network:
+  8080/tcp: Guest pages opened from the room QR codes

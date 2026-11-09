@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="__DEFAULT_LANG__" data-default-lang="__DEFAULT_LANG__">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#F4F2EE" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#121316" media="(prefers-color-scheme: dark)">
+<title>Climat cameră</title>
+<link rel="stylesheet" href="/static/style.css">
+<script src="/static/app.js" defer></script>
+</head>
+<body>
+<main id="app">
+  <div id="banner" class="banner" hidden></div>
+
+  <!-- Loading -->
+  <section id="view-loading" class="view center-msg">
+    <div class="spinner" aria-hidden="true"></div>
+    <p data-i18n="loading"></p>
+  </section>
+
+  <!-- Room control -->
+  <section id="view-control" class="view content" hidden>
+    <header class="hdr">
+      <div>
+        <div class="eyebrow" id="room-sub"></div>
+        <h1 id="room-name"></h1>
+      </div>
+      <div class="right">
+        <div class="live" id="live"><i></i><span data-i18n="live"></span></div>
+        <button class="lang" id="lang-btn" type="button" aria-label="Language"><b data-lang="ro">RO</b> · <b data-lang="en">EN</b></button>
+      </div>
+    </header>
+
+    <div class="card">
+      <div class="dial">
+        <svg viewBox="0 0 250 212" aria-hidden="true">
+          <path d="M 40 180 A 100 100 0 1 1 210 180" class="dial-track"/>
+          <path id="dial-arc" d="" class="dial-arc"/>
+          <circle id="dial-knob" cx="0" cy="0" r="6" class="dial-knob"/>
+          <text x="34" y="205" class="dial-lim" id="dial-min"></text>
+          <text x="216" y="205" class="dial-lim" id="dial-max" text-anchor="end"></text>
+        </svg>
+        <div class="center">
+          <div class="lbl" data-i18n="target"></div>
+          <div class="big"><span id="target"></span><sup>°C</sup></div>
+          <div class="cur"><span data-i18n="now"></span> <b id="current"></b></div>
+        </div>
+      </div>
+      <div class="ctrl">
+        <button class="btn" id="minus" type="button" aria-label="−">−</button>
+        <div class="state" id="action"></div>
+        <button class="btn plus" id="plus" type="button" aria-label="+">+</button>
+      </div>
+      <div class="limits" id="limits"></div>
+      <div class="chips" id="chips"></div>
+      <div class="modes" id="modes" hidden></div>
+    </div>
+
+    <div class="sec"><h2 data-i18n="next_in_room"></h2><a href="#program" id="all-link" data-i18n="all_events"></a></div>
+    <div id="next-event"></div>
+  </section>
+
+  <!-- Schedule -->
+  <section id="view-schedule" class="view content" hidden>
+    <header class="hdr">
+      <div>
+        <a class="eyebrow back" href="#">‹ <span id="room-name-2"></span></a>
+        <h1 data-i18n="schedule"></h1>
+      </div>
+      <div class="right"><div class="live" id="live-2"><i></i><span data-i18n="live"></span></div></div>
+    </header>
+    <div class="legend">
+      <span><i class="lg-pre"></i><span data-i18n="preconditioning"></span></span>
+      <span><i class="lg-ev"></i><span data-i18n="event"></span></span>
+      <span><i class="lg-now"></i><span data-i18n="now_short"></span></span>
+    </div>
+    <div id="schedule-list"></div>
+    <div class="foot" id="schedule-foot"></div>
+  </section>
+
+  <!-- Invalid code -->
+  <section id="view-invalid" class="view center-msg" hidden>
+    <div class="ic"><svg width="38" height="38" viewBox="0 0 24 24" fill="none" stroke-width="1.8" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3M21 14v7h-7"/><path class="slash" d="M2 22L22 2"/></svg></div>
+    <h1 data-i18n="invalid_title"></h1>
+    <p data-i18n="invalid_body"></p>
+    <div class="box"><b data-i18n="need_help"></b><br><span id="help-text"></span></div>
+  </section>
+
+  <div id="toast" class="toast" hidden><span id="toast-text"></span><button type="button" id="toast-undo" data-i18n="undo"></button></div>
+</main>
+</body>
+</html>

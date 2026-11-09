@@ -1,0 +1,51 @@
+blueprint:
+  name: Room precondition (Room Climate Portal)
+  description: >-
+    Sets a room's thermostat to the event's target temperature at the precondition
+    time that the room's QR page shows. Uses sensor.<room>_next_precondition, which the
+    Room Climate Portal add-on publishes. Create one automation per room from this blueprint.
+  domain: automation
+  source_url: https://github.com/dani-smartresidence/multiroom_hvac_controll/blob/main/blueprints/automation/room_precondition.yaml
+  input:
+    precondition_sensor:
+      name: Precondition sensor
+      description: sensor.<room>_next_precondition published by the add-on
+      selector:
+        entity:
+          filter:
+            - domain: sensor
+              device_class: timestamp
+    climate_entity:
+      name: Room thermostat
+      selector:
+        entity:
+          filter:
+            - domain: climate
+    hvac_mode:
+      name: HVAC mode to use
+      default: heat
+      selector:
+        select:
+          options: [heat, cool, heat_cool, auto]
+
+mode: single
+
+triggers:
+  - trigger: time
+    at: !input precondition_sensor
+
+variables:
+  sensor: !input precondition_sensor
+  target: "{{ state_attr(sensor, 'target_temperature') }}"
+
+conditions:
+  - condition: template
+    value_template: "{{ target is number }}"
+
+actions:
+  - action: climate.set_temperature
+    target:
+      entity_id: !input climate_entity
+    data:
+      hvac_mode: !input hvac_mode
+      temperature: "{{ target }}"
