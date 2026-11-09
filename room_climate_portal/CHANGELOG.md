@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.1
+- Browsers and the HA app now always load the current admin and room-page scripts after an update
+  (versioned asset URLs, revalidated static files). Before, an old cached script could hide new buttons.
+
 ## 0.3.0
 - Custom QR code per room: on the admin page, **Custom code** sets the room link to `<public_url>/camera/<your code>`
   (4-64 letters, digits, - or _; unique; case-insensitive check). **New random code** goes back to a random one.

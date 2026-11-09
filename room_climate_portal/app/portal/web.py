@@ -19,6 +19,22 @@ from .tokens import CodeError
 
 _LOGGER = logging.getLogger(__name__)
 STATIC = Path(__file__).parent / "static"
+
+
+def _asset_version() -> str:
+    """Hash of all static files: changes with every release, so browsers and the
+    HA app never keep running an old script after an update."""
+    import hashlib
+
+    h = hashlib.sha1()
+    for f in sorted(STATIC.rglob("*")):
+        if f.is_file():
+            h.update(f.name.encode())
+            h.update(f.read_bytes())
+    return h.hexdigest()[:10]
+
+
+ASSET_V = _asset_version()
 PORTAL_KEY = web.AppKey("portal", Portal)
 
 GUEST_CSP = (
@@ -32,9 +48,15 @@ def _json(data, status: int = 200) -> web.Response:
     return web.json_response(data, status=status, headers={"Cache-Control": "no-store"})
 
 
+def _revalidate_static(request: web.Request, resp) -> None:
+    if "/static/" in request.path:
+        resp.headers["Cache-Control"] = "no-cache"
+
+
 @web.middleware
 async def guest_headers(request: web.Request, handler):
     resp = await handler(request)
+    _revalidate_static(request, resp)
     resp.headers.setdefault("Content-Security-Policy", GUEST_CSP)
     resp.headers.setdefault("Referrer-Policy", "no-referrer")
     resp.headers.setdefault("X-Content-Type-Options", "nosniff")
@@ -69,6 +91,7 @@ def build_guest_app(portal: Portal) -> web.Application:
         body = (
             index_html.replace("__DEFAULT_LANG__", portal.options.default_language)
             .replace("__BASE__", base)
+            .replace("__V__", ASSET_V)
         )
         return web.Response(text=body, content_type="text/html", headers={"Cache-Control": "no-store"})
 
@@ -246,6 +269,7 @@ async def ingress_only(request: web.Request, handler):
     if os.environ.get("PORTAL_ADMIN_OPEN") != "1" and request.remote not in INGRESS_IPS:
         raise web.HTTPForbidden(text="Admin is only reachable through Home Assistant.")
     resp = await handler(request)
+    _revalidate_static(request, resp)
     resp.headers.setdefault("X-Content-Type-Options", "nosniff")
     return resp
 
@@ -286,7 +310,8 @@ def build_admin_app(portal: Portal) -> web.Application:
 
     @routes.get("/")
     async def index(_request):
-        return web.FileResponse(STATIC / "admin" / "index.html")
+        body = (STATIC / "admin" / "index.html").read_text(encoding="utf-8").replace("__V__", ASSET_V)
+        return web.Response(text=body, content_type="text/html", headers={"Cache-Control": "no-store"})
 
     @routes.get("/api/status")
     async def status(_request):

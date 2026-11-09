@@ -194,3 +194,14 @@ async def test_admin_custom_code(env):
     r = await admin.post("/api/rooms/camera_204/code", json={"code": None})
     assert not (await r.json())["custom_code"]
     assert (await guest.get("/camera/api/c204")).status == 404
+
+
+async def test_assets_are_versioned(env):
+    _, _, guest, admin = env
+    html = await (await admin.get("/")).text()
+    assert "static/admin.js?v=" in html and "__V__" not in html
+    r = await admin.get("/static/admin.js")
+    assert r.status == 200 and r.headers["Cache-Control"] == "no-cache"
+    page = await (await guest.get("/camera/AAAAAAAAAAAAAAAAAAAAAA")).text()
+    assert "/camera/static/app.js?v=" in page
+    assert (await guest.get("/camera/static/app.js")).headers["Cache-Control"] == "no-cache"
