@@ -71,7 +71,7 @@ async def test_invalid_token_and_page(env):
     page = await guest.get("/camera/AAAAAAAAAAAAAAAAAAAAAA")
     text = await page.text()
     assert page.status == 200 and 'data-default-lang="ro"' in text and 'data-base="/camera"' in text
-    assert 'src="/camera/static/app.js"' in text
+    assert 'src="/camera/static/app.js?v=' in text
     assert (await guest.get("/camera/static/app.js")).status == 200
 
 
