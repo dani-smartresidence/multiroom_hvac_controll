@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.1
+- Admin page: search box (room name, floor, room id, code, thermostat or calendar entity; accents ignored,
+  so "sala tehnica" finds "Sala tehnică") and filters: Heating on, Manual / planned, Event in 24 h,
+  PIN on, No PIN, Problems. Recent changes follow the same filter.
+- Admin page shows "Manual until HH:MM" and planned periods per room, and readable manual-heating entries in Recent changes.
+
 ## 0.4.0
 - Manual heating from the room page: start for 1 h / 2 h / 4 h or until a chosen hour; it turns itself off
   after 2 h by default. While on: +30 min, +1 h, turn off at another hour, or turn off now.

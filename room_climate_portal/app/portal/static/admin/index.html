@@ -21,6 +21,19 @@
   </div>
 </header>
 <main>
+  <div class="filters" id="filters" hidden>
+    <input type="search" id="q" placeholder="Search room, floor, code, entity…" aria-label="Search rooms" autocomplete="off">
+    <div class="chips" id="chips" role="group" aria-label="Filter">
+      <button type="button" data-f="all" class="on">All</button>
+      <button type="button" data-f="heating">Heating on</button>
+      <button type="button" data-f="manual">Manual / planned</button>
+      <button type="button" data-f="event">Event in 24 h</button>
+      <button type="button" data-f="pin">PIN on</button>
+      <button type="button" data-f="nopin">No PIN</button>
+      <button type="button" data-f="issues">Problems</button>
+    </div>
+    <span class="count" id="count"></span>
+  </div>
   <table id="rooms">
     <thead><tr><th>Room</th><th>Thermostat</th><th>Now / target</th><th>Calendar &amp; lead time</th><th>Next event</th><th>QR code</th><th>PIN</th></tr></thead>
     <tbody></tbody>

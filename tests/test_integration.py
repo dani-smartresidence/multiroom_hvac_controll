@@ -309,3 +309,12 @@ async def test_hold_needs_pin(env):
     tok = portal.tokens.token_for(rid)
     r = await guest.post(f"/camera/api/{tok}/hold", json={"action": "start"})
     assert r.status == 401
+
+
+async def test_admin_rooms_show_hold(env):
+    _, portal, guest, admin = env
+    tok = portal.tokens.token_for("camera_102")
+    await guest.post(f"/camera/api/{tok}/hold", json={"action": "start", "minutes": 60})
+    rows = {r["id"]: r for r in await (await admin.get("/api/rooms")).json()}
+    assert rows["camera_102"]["hold"]["active"] and rows["camera_102"]["planned"] == 0
+    assert rows["camera_204"]["hold"] is None

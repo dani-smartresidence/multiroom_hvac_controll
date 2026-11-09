@@ -26,6 +26,16 @@ code,.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12p
 @media (max-width:900px){thead{display:none}table,tbody,tr,td{display:block;width:100%}tr{border-bottom:1px solid var(--line)}td{border:0;padding:6px 12px}}
 .btns{display:flex;flex-direction:column;gap:6px;margin-top:6px;align-items:flex-start}
 [hidden]{display:none!important}
+.filters{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:0 0 12px}
+.filters input{flex:1 1 260px;min-width:0;font:inherit;padding:9px 12px;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--ink)}
+.filters input:focus{outline:none;border-color:var(--accent)}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chips button{padding:6px 12px;border-radius:999px;font-size:12px}
+.chips button.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.chips button b{font-weight:600;opacity:.6;margin-left:4px}
+.count{color:var(--muted);font-size:12px}
+.hold{display:inline-block;margin-top:4px;font-size:12px;color:var(--accent);font-weight:600}
+.nomatch td{color:var(--muted);text-align:center;padding:20px}
 .danger{background:#C2410C;border-color:#C2410C;color:#fff}
 .dlg-back{position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;padding:16px;z-index:10}
 .dlg{background:var(--card);color:var(--ink);border:1px solid var(--line);border-radius:16px;padding:20px;width:100%;max-width:380px;box-shadow:0 20px 50px rgba(0,0,0,.3)}

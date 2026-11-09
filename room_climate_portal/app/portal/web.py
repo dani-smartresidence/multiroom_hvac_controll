@@ -319,6 +319,8 @@ def build_admin_app(portal: Portal) -> web.Application:
             "open_pages": portal.watcher_count(rid),
             "pin_enabled": portal.pins.enabled(rid),
             "custom_code": portal.tokens.is_custom(rid),
+            "hold": next((h for h in snap["holds"] if h["active"]), None),
+            "planned": len([h for h in snap["holds"] if not h["active"]]),
         }
 
     def get_room(request) -> str:
