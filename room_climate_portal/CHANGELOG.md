@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.2
+- Admin page: set each room's target temperature (− / +) and climate mode (Off, Heat, …) right in the room list.
+  Staff changes have no rate limit and no auto-off timer; they are logged as "admin" in Recent changes.
+  Guests still cannot change the mode unless `allow_mode_change` is on.
+
 ## 0.4.1
 - Admin page: search box (room name, floor, room id, code, thermostat or calendar entity; accents ignored,
   so "sala tehnica" finds "Sala tehnică") and filters: Heating on, Manual / planned, Event in 24 h,

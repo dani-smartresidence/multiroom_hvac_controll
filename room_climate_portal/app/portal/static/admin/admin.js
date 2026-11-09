@@ -66,13 +66,87 @@
     renderRooms();
   });
 
+  // ------------------------------------------------------------ thermostat control
+  var PENDING = {}, TIMERS = {};
+  var MODE_LABEL = { off: "Off", heat: "Heat", cool: "Cool", auto: "Auto", heat_cool: "Heat / cool", dry: "Dry", fan_only: "Fan" };
+  function climateCell(r) {
+    var now = '<div class="now">Now <b>' + num(r.current) + " °C</b>" + (r.hvac_action ? ' <span class="muted">· ' + esc(r.hvac_action) + "</span>" : "") + "</div>";
+    if (!r.climate || !r.available) return now + '<div class="muted">Thermostat unavailable</div>';
+    var shown = PENDING[r.id] != null ? PENDING[r.id] : r.target;
+    var stepper = '<div class="stepper' + (PENDING[r.id] != null ? " pending" : "") + '">' +
+      '<button type="button" class="small" data-temp="' + esc(r.id) + '" data-dir="-1"' + (shown != null && shown <= r.set_min ? " disabled" : "") + ' aria-label="Lower">−</button>' +
+      "<b>" + num(shown) + " °C</b>" +
+      '<button type="button" class="small" data-temp="' + esc(r.id) + '" data-dir="1"' + (shown != null && shown >= r.set_max ? " disabled" : "") + ' aria-label="Raise">+</button></div>';
+    var modes = (r.hvac_modes || []).map(function (m) {
+      return '<option value="' + esc(m) + '"' + (m === r.hvac_mode ? " selected" : "") + ">" + esc(MODE_LABEL[m] || m) + "</option>";
+    }).join("");
+    var sel = modes ? '<select class="mode" data-mode="' + esc(r.id) + '" aria-label="Mode">' + modes + "</select>" : "";
+    return now + stepper + sel;
+  }
+  function roomById(id) { return ROOMS.filter(function (r) { return r.id === id; })[0]; }
+  function replaceRoom(updated) {
+    ROOMS = ROOMS.map(function (r) { return r.id === updated.id ? updated : r; });
+    renderRooms();
+  }
+  function flash(msg) {
+    var el = $("#flash");
+    el.textContent = msg;
+    el.hidden = false;
+    clearTimeout(flash.t);
+    flash.t = setTimeout(function () { el.hidden = true; }, 5000);
+  }
+  function sendRoom(id, path, body) {
+    return fetch("api/rooms/" + encodeURIComponent(id) + "/" + path, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body)
+    }).then(function (r) {
+      return r.json().catch(function () { return {}; }).then(function (b) {
+        if (!r.ok) throw new Error(b.error || ("HTTP " + r.status));
+        return b;
+      });
+    });
+  }
+  function stepTemp(id, dir) {
+    var r = roomById(id);
+    if (!r) return;
+    var st = r.step || 0.5, base = PENDING[id] != null ? PENDING[id] : (r.target != null ? r.target : 21);
+    var v = Math.round((base + dir * st) / st) * st;
+    PENDING[id] = Math.min(r.set_max, Math.max(r.set_min, Math.round(v * 100) / 100));
+    renderRooms();
+    clearTimeout(TIMERS[id]);
+    TIMERS[id] = setTimeout(function () {
+      var value = PENDING[id];
+      sendRoom(id, "temperature", { temperature: value }).then(function (row) {
+        if (PENDING[id] === value) delete PENDING[id];
+        replaceRoom(row);
+        flash(row.name + ": target set to " + num(value) + " °C");
+      }).catch(function (e) {
+        delete PENDING[id];
+        renderRooms();
+        flash(r.name + ": " + e.message);
+      });
+    }, 700);
+  }
+  document.addEventListener("change", function (ev) {
+    var s = ev.target.closest("select[data-mode]");
+    if (!s) return;
+    var id = s.getAttribute("data-mode"), r = roomById(id), mode = s.value;
+    s.disabled = true;
+    sendRoom(id, "mode", { hvac_mode: mode }).then(function (row) {
+      replaceRoom(row);
+      flash(row.name + ": mode " + (MODE_LABEL[mode] || mode));
+    }).catch(function (e) {
+      renderRooms();
+      flash((r ? r.name : id) + ": " + e.message);
+    });
+  });
+
   function row(r) {
     var issues = (r.issues || []).map(function (i) { return '<span class="issue">' + esc(i) + "</span>"; }).join(" ");
     var ev = r.next_event;
     return "<tr data-id=\"" + esc(r.id) + "\">" +
       "<td><b>" + esc(r.name) + "</b><div class=\"muted\">" + esc(r.subtitle) + "</div><div class=\"mono muted\">" + esc(r.id) + "</div>" + (issues ? "<div>" + issues + "</div>" : "") + "</td>" +
       "<td class=\"mono\">" + esc(r.climate || "–") + "<div class=\"muted\">" + esc(r.hvac_mode || "") + " · " + num(r.min_temp) + "–" + num(r.max_temp) + " °C</div></td>" +
-      "<td>" + num(r.current) + " / <b>" + num(r.target) + "</b> °C" +
+      "<td>" + climateCell(r) +
         (r.hold ? '<div class="hold">Manual until ' + hm(r.hold.end) + "</div>" : "") +
         (r.planned ? '<div class="muted">' + r.planned + " planned</div>" : "") + "</td>" +
       "<td class=\"mono\">" + esc(r.calendar || "–") + "<div>" + esc(r.lead_time || "default") + " → " + esc(r.lead_minutes) + " min</div></td>" +
@@ -108,7 +182,8 @@
     });
     fetch("api/audit?limit=50").then(function (r) { return r.json(); }).then(function (rows) {
       $("#audit tbody").innerHTML = rows.map(function (a) {
-        var change = a.action === "set_temperature" ? num(a.old) + " → " + num(a.new) + " °C"
+        var change = a.action === "set_hvac_mode" ? "Mode " + esc(a.old) + " → " + esc(a.new)
+          : a.action === "set_temperature" ? num(a.old) + " → " + num(a.new) + " °C"
           : a.action === "rotate_token" ? "QR code replaced"
           : a.action === "heating_on" ? "Manual heating on, " + num(a.new) + " °C until " + hm(a.until)
           : a.action === "heating_until" ? "Manual heating now ends " + hm(a.until)
@@ -176,6 +251,8 @@
   function validPin(v) { return /^\d{4,8}$/.test(v) ? null : "The PIN must be 4 to 8 digits."; }
 
   document.addEventListener("click", function (ev) {
+    var tb = ev.target.closest("button[data-temp]");
+    if (tb) return stepTemp(tb.getAttribute("data-temp"), parseInt(tb.getAttribute("data-dir"), 10));
     if (ev.target.id === "clear") {
       $("#q").value = ""; FILTER = "all";
       try { sessionStorage.removeItem("rcp-admin-q"); sessionStorage.removeItem("rcp-admin-filter"); } catch (e) { /* ignore */ }
@@ -235,5 +312,9 @@
     fetch("api/reload", { method: "POST" }).then(function () { btn.disabled = false; load(); });
   });
   load();
-  setInterval(load, 30000);
+  setInterval(function () {
+    var a = document.activeElement;
+    if (a && a.matches && a.matches("select.mode")) return;  // don't close an open mode menu
+    load();
+  }, 30000);
 })();

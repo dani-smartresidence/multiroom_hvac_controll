@@ -318,3 +318,24 @@ async def test_admin_rooms_show_hold(env):
     rows = {r["id"]: r for r in await (await admin.get("/api/rooms")).json()}
     assert rows["camera_102"]["hold"]["active"] and rows["camera_102"]["planned"] == 0
     assert rows["camera_204"]["hold"] is None
+
+
+async def test_admin_sets_temperature_and_mode(env):
+    fake, portal, guest, admin = env
+    r = await admin.post("/api/rooms/camera_204/temperature", json={"temperature": 30})
+    assert r.status == 200 and (await r.json())["target"] == 25  # clamped to the room max
+    # No rate limit for staff, and no auto-off timer.
+    r = await admin.post("/api/rooms/camera_204/temperature", json={"temperature": 21})
+    assert r.status == 200 and (await r.json())["target"] == 21
+    assert portal.holds.active("camera_204") is None
+    r = await admin.post("/api/rooms/camera_204/mode", json={"hvac_mode": "off"})
+    row = await r.json()
+    assert r.status == 200 and row["hvac_mode"] == "off" and row["hvac_modes"] == ["off", "heat"]
+    assert fake.states["climate.camera_204"]["state"] == "off"
+    r = await admin.post("/api/rooms/camera_204/mode", json={"hvac_mode": "cool"})
+    assert r.status == 400
+    r = await admin.post("/api/rooms/camera_204/temperature", json={"temperature": "x"})
+    assert r.status == 400
+    # Guests still cannot change the mode.
+    tok = portal.tokens.token_for("camera_204")
+    assert (await guest.post(f"/camera/api/{tok}/mode", json={"hvac_mode": "heat"})).status == 403

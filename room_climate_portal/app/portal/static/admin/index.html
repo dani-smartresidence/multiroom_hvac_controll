@@ -35,7 +35,7 @@
     <span class="count" id="count"></span>
   </div>
   <table id="rooms">
-    <thead><tr><th>Room</th><th>Thermostat</th><th>Now / target</th><th>Calendar &amp; lead time</th><th>Next event</th><th>QR code</th><th>PIN</th></tr></thead>
+    <thead><tr><th>Room</th><th>Thermostat</th><th>Temperature &amp; mode</th><th>Calendar &amp; lead time</th><th>Next event</th><th>QR code</th><th>PIN</th></tr></thead>
     <tbody></tbody>
   </table>
   <p class="empty" id="empty" hidden>No rooms found. Put the label <code id="label"></code> on each room's Area in Home Assistant (Settings → Areas), or list rooms in <code>/addon_configs/…room_climate_portal/rooms.yaml</code>, then press “Re-scan rooms”.</p>
@@ -46,6 +46,7 @@
     <tbody></tbody>
   </table>
 </main>
+<div class="flash" id="flash" role="status" hidden></div>
 <div class="dlg-back" id="dlg" hidden>
   <form class="dlg" id="dlg-form" autocomplete="off">
     <h3 id="dlg-title"></h3>

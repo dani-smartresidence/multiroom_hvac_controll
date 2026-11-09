@@ -318,14 +318,15 @@ class Portal:
         self._last_change[room_id] = now
         window.append(now)
 
-    async def set_temperature(self, room_id: str, value: float, client: str) -> float:
+    async def set_temperature(self, room_id: str, value: float, client: str, admin: bool = False) -> float:
         room = self.rooms[room_id]
         if not room.climate:
             raise HAError("no_climate", "room has no thermostat")
         st = self.states.get(room.climate) or {}
         attrs = st.get("attributes") or {}
         target = clamp_setpoint(room, value, attrs)
-        self._check_rate(room_id, client)
+        if not admin:
+            self._check_rate(room_id, client)
         old = attrs.get("temperature")
         data: dict = {"temperature": target}
         mode = self._heat_mode(room)
@@ -337,7 +338,7 @@ class Portal:
         if hold:
             hold["target"] = target
             self.holds.save()
-        else:
+        elif not admin:  # staff changes from the admin page are not switched off by a timer
             # A change from the page is manual heating: it switches itself off later.
             now = datetime.now(self.tz)
             self.holds.add(room_id, now, self._default_end(room_id, now), target, "manual", True)
@@ -515,21 +516,22 @@ class Portal:
             if changed:
                 self.broadcast(room.id, {"type": "room", "room": self.snapshot(room.id)})
 
-    async def set_mode(self, room_id: str, mode: str, client: str) -> str:
+    async def set_mode(self, room_id: str, mode: str, client: str, admin: bool = False) -> str:
         room = self.rooms[room_id]
-        if not room.allow_mode_change or not room.climate:
+        if not room.climate or not (room.allow_mode_change or admin):
             raise PermissionError("mode change not allowed")
         st = self.states.get(room.climate) or {}
         modes = (st.get("attributes") or {}).get("hvac_modes") or []
         if mode not in modes:
             raise ValueError("unsupported mode")
-        self._check_rate(room_id, client)
+        if not admin:
+            self._check_rate(room_id, client)
         await self.ha.call_service("climate", "set_hvac_mode", {"hvac_mode": mode}, entity_id=room.climate)
         self.audit.write(room=room_id, action="set_hvac_mode", old=st.get("state"), new=mode, client=client)
         active = self.holds.active(room_id)
         if mode == "off" and active:
             self.holds.remove(active["id"])
-            self.broadcast(room_id, {"type": "room", "room": self.snapshot(room_id)})
+        self.broadcast(room_id, {"type": "room", "room": self.snapshot(room_id)})
         return mode
 
     # ------------------------------------------------------------------ tokens

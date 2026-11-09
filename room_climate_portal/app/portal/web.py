@@ -314,6 +314,12 @@ def build_admin_app(portal: Portal) -> web.Application:
             "current": snap["climate"]["current"],
             "target": snap["climate"]["target"],
             "hvac_mode": snap["climate"]["hvac_mode"],
+            "hvac_modes": snap["climate"]["hvac_modes"],
+            "hvac_action": snap["climate"]["hvac_action"],
+            "available": snap["climate"]["available"],
+            "set_min": snap["climate"]["min"],
+            "set_max": snap["climate"]["max"],
+            "step": snap["climate"]["step"],
             "lead_minutes": snap["lead_minutes"],
             "next_event": next((e for e in snap["events"] if not e["all_day"]), None),
             "open_pages": portal.watcher_count(rid),
@@ -386,6 +392,47 @@ def build_admin_app(portal: Portal) -> web.Application:
             return _json({"error": str(err)}, 400)
         portal.audit.write(room=rid, action="code_custom" if code else "rotate_token", client="admin")
         portal.broadcast(rid, {"type": "revoked"})
+        return _json(room_row(rid))
+
+    async def admin_body(request) -> dict:
+        try:
+            data = await request.json()
+        except Exception:  # noqa: BLE001
+            data = None
+        if not isinstance(data, dict):
+            raise web.HTTPBadRequest(text=json.dumps({"error": "bad json"}), content_type="application/json")
+        return data
+
+    @routes.post("/api/rooms/{room_id}/temperature")
+    async def admin_temperature(request):
+        rid = get_room(request)
+        data = await admin_body(request)
+        try:
+            value = float(data.get("temperature"))
+            if value != value or abs(value) > 100:
+                raise ValueError
+        except (TypeError, ValueError):
+            return _json({"error": "Not a temperature"}, 400)
+        try:
+            await portal.set_temperature(rid, value, "admin", admin=True)
+        except HAError as err:
+            return _json({"error": f"Home Assistant: {err.message}"}, 502)
+        await asyncio.sleep(0.3)  # let HA's state change arrive
+        return _json(room_row(rid))
+
+    @routes.post("/api/rooms/{room_id}/mode")
+    async def admin_mode(request):
+        rid = get_room(request)
+        data = await admin_body(request)
+        try:
+            await portal.set_mode(rid, str(data.get("hvac_mode", "")), "admin", admin=True)
+        except PermissionError:
+            return _json({"error": "This room has no thermostat"}, 400)
+        except ValueError:
+            return _json({"error": "The thermostat does not support this mode"}, 400)
+        except HAError as err:
+            return _json({"error": f"Home Assistant: {err.message}"}, 502)
+        await asyncio.sleep(0.3)
         return _json(room_row(rid))
 
     @routes.post("/api/rooms/{room_id}/pin")
