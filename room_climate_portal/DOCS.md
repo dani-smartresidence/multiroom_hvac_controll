@@ -82,6 +82,7 @@ No NGINX needed. Set `trust_proxy_headers: true` in this add-on.
   and set this add-on's `public_url` to `https://camera.voxdomini.ro`.
 
 `172.30.32.1` is the HA host as seen from add-ons, where port 8080 of this add-on is published.
+If `cloudflared` runs on another computer (not as an HA add-on), use the HA machine's LAN IP instead, e.g. `http://192.168.1.50:8080`.
 
 ### With Nabu Casa remote access
 
