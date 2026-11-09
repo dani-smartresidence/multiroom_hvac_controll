@@ -67,6 +67,9 @@ class TokenStore:
                 found = room_id
         return found
 
+    def sign(self, message: str) -> str:
+        return hmac.new(self._secret, message.encode(), hashlib.sha256).hexdigest()
+
     def client_id(self, value: str) -> str:
         """Short pseudonymous id for audit logs (no raw IPs stored)."""
         return hmac.new(self._secret, value.encode(), hashlib.sha256).hexdigest()[:12]

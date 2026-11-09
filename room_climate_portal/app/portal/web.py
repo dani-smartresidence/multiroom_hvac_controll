@@ -14,6 +14,7 @@ from aiohttp import web
 
 from .core import Portal, RateLimited
 from .ha import HAError
+from .pins import PIN_RE, PinLocked
 
 _LOGGER = logging.getLogger(__name__)
 STATIC = Path(__file__).parent / "static"
@@ -50,49 +51,111 @@ def client_ip(request: web.Request, portal: Portal) -> str:
 
 
 # --------------------------------------------------------------------------- guest
+TOKEN_RE = r"[A-Za-z0-9_-]{16,64}"
+
+
 def build_guest_app(portal: Portal) -> web.Application:
+    """Guest server. Every path lives under options.base_path (default /camera), so a
+    reverse proxy in front of HA can route https://ha.example.ro/camera/... here."""
     app = web.Application(middlewares=[guest_headers], client_max_size=4096)
     app[PORTAL_KEY] = portal
     routes = web.RouteTableDef()
+    base = portal.options.base_path
     index_html = (STATIC / "guest" / "index.html").read_text(encoding="utf-8")
+    cookie_path = (base or "") + "/"
 
     def page() -> web.Response:
-        body = index_html.replace("__DEFAULT_LANG__", portal.options.default_language)
+        body = (
+            index_html.replace("__DEFAULT_LANG__", portal.options.default_language)
+            .replace("__BASE__", base)
+        )
         return web.Response(text=body, content_type="text/html", headers={"Cache-Control": "no-store"})
+
+    def error(exc, payload: dict, **kw):
+        return exc(text=json.dumps(payload, ensure_ascii=False), content_type="application/json", **kw)
 
     def resolve(request: web.Request) -> str:
         if not portal.ready:
-            raise web.HTTPServiceUnavailable(
-                text=json.dumps({"error": "starting"}), content_type="application/json",
-                headers={"Retry-After": "5"},
-            )
+            raise error(web.HTTPServiceUnavailable, {"error": "starting"}, headers={"Retry-After": "5"})
         room_id = portal.room_for_token(request.match_info["token"])
         if room_id is None:
-            raise web.HTTPNotFound(
-                text=json.dumps({"error": "invalid_code", "help_text": portal.options.help_text}),
-                content_type="application/json",
+            raise error(web.HTTPNotFound, {"error": "invalid_code", "help_text": portal.options.help_text})
+        return room_id
+
+    def cookie_name(room_id: str) -> str:
+        return "rcp_" + portal.tokens.sign("cookie:" + room_id)[:12]
+
+    def authorize(request: web.Request) -> str:
+        room_id = resolve(request)
+        if not portal.pins.session_valid(room_id, request.cookies.get(cookie_name(room_id))):
+            room = portal.rooms[room_id]
+            raise error(
+                web.HTTPUnauthorized,
+                {"error": "pin_required", "name": room.name, "subtitle": room.subtitle,
+                 "default_language": portal.options.default_language, "help_text": portal.options.help_text},
             )
         return room_id
 
+    def is_https(request: web.Request) -> bool:
+        if request.secure:
+            return True
+        if portal.options.trust_proxy_headers:
+            return request.headers.get("X-Forwarded-Proto", "").lower() == "https"
+        return False
+
     @routes.get("/")
     async def root(_request):
-        return page()
-
-    @routes.get("/r/{token}")
-    async def room_page(_request):
         return page()
 
     @routes.get("/healthz")
     async def health(_request):
         return _json({"ok": True, "ha_connected": portal.ha.connected.is_set(), "rooms": len(portal.rooms)})
 
-    @routes.get("/api/r/{token}")
-    async def room_state(request):
-        return _json(portal.snapshot(resolve(request)))
+    if base:
+        @routes.get(base)
+        @routes.get(base + "/")
+        async def base_root(_request):
+            return page()
 
-    @routes.get("/api/r/{token}/stream")
-    async def room_stream(request):
+        @routes.get(base + "/healthz")
+        async def base_health(request):
+            return await health(request)
+
+    @routes.get(base + "/{token:" + TOKEN_RE + "}")
+    async def room_page(_request):
+        return page()
+
+    api = base + "/api/{token:" + TOKEN_RE + "}"
+
+    @routes.get(api)
+    async def room_state(request):
+        return _json(portal.snapshot(authorize(request)))
+
+    @routes.post(api + "/pin")
+    async def pin(request):
         room_id = resolve(request)
+        data = await _body(request)
+        client = portal.tokens.client_id(client_ip(request, portal))
+        try:
+            ok, left = portal.pins.verify(room_id, str(data.get("pin", "")), client)
+        except PinLocked as err:
+            portal.audit.write(room=room_id, action="pin_locked", client=client)
+            return _json({"error": "locked", "retry_after": err.retry_after}, 429)
+        if not ok:
+            portal.audit.write(room=room_id, action="pin_wrong", client=client)
+            return _json({"error": "wrong_pin", "attempts_left": left}, 403)
+        resp = _json({"ok": True})
+        if portal.pins.enabled(room_id):
+            resp.set_cookie(
+                cookie_name(room_id), portal.pins.make_session(room_id),
+                max_age=portal.pins.remember_s, path=cookie_path, httponly=True,
+                samesite="Strict", secure=is_https(request),
+            )
+        return resp
+
+    @routes.get(api + "/stream")
+    async def room_stream(request):
+        room_id = authorize(request)
         resp = web.StreamResponse(
             headers={
                 "Content-Type": "text/event-stream",
@@ -113,6 +176,8 @@ def build_guest_app(portal: Portal) -> web.Application:
                 if msg.get("type") == "connection":
                     msg = {"type": "room", "room": portal.snapshot(room_id)}
                 await resp.write(_sse(msg))
+                if msg.get("type") in ("revoked", "reauth"):
+                    break
         except (ConnectionResetError, asyncio.CancelledError):
             pass
         finally:
@@ -123,14 +188,14 @@ def build_guest_app(portal: Portal) -> web.Application:
         try:
             data = await request.json()
         except Exception:  # noqa: BLE001
-            raise web.HTTPBadRequest(text='{"error":"bad_json"}', content_type="application/json")
+            raise error(web.HTTPBadRequest, {"error": "bad_json"})
         if not isinstance(data, dict):
-            raise web.HTTPBadRequest(text='{"error":"bad_json"}', content_type="application/json")
+            raise error(web.HTTPBadRequest, {"error": "bad_json"})
         return data
 
-    @routes.post("/api/r/{token}/setpoint")
+    @routes.post(api + "/setpoint")
     async def setpoint(request):
-        room_id = resolve(request)
+        room_id = authorize(request)
         data = await _body(request)
         try:
             value = float(data.get("temperature"))
@@ -148,9 +213,9 @@ def build_guest_app(portal: Portal) -> web.Application:
             return _json({"error": "ha_error", "message": err.message}, 502)
         return _json({"ok": True, "temperature": applied})
 
-    @routes.post("/api/r/{token}/mode")
+    @routes.post(api + "/mode")
     async def mode(request):
-        room_id = resolve(request)
+        room_id = authorize(request)
         data = await _body(request)
         client = portal.tokens.client_id(client_ip(request, portal))
         try:
@@ -166,7 +231,7 @@ def build_guest_app(portal: Portal) -> web.Application:
         return _json({"ok": True, "hvac_mode": applied})
 
     app.add_routes(routes)
-    app.router.add_static("/static/", STATIC / "guest", show_index=False)
+    app.router.add_static(base + "/static/", STATIC / "guest", show_index=False)
     return app
 
 
@@ -208,6 +273,7 @@ def build_admin_app(portal: Portal) -> web.Application:
             "lead_minutes": snap["lead_minutes"],
             "next_event": next((e for e in snap["events"] if not e["all_day"]), None),
             "open_pages": portal.watcher_count(rid),
+            "pin_enabled": portal.pins.enabled(rid),
         }
 
     def get_room(request) -> str:
@@ -244,6 +310,32 @@ def build_admin_app(portal: Portal) -> web.Application:
         # Close pages opened with the old code.
         portal.broadcast(rid, {"type": "revoked"})
         return _json(room_row(rid))
+
+    async def read_pin(request) -> str | None:
+        try:
+            data = await request.json()
+        except Exception:  # noqa: BLE001
+            raise web.HTTPBadRequest(text="bad json")
+        pin = data.get("pin") if isinstance(data, dict) else None
+        if pin in (None, ""):
+            return None
+        pin = str(pin)
+        if not PIN_RE.match(pin):
+            raise web.HTTPBadRequest(text=json.dumps({"error": "PIN must be 4 to 8 digits"}), content_type="application/json")
+        return pin
+
+    @routes.post("/api/rooms/{room_id}/pin")
+    async def set_pin(request):
+        rid = get_room(request)
+        portal.set_pin(rid, await read_pin(request))
+        return _json(room_row(rid))
+
+    @routes.post("/api/pin_all")
+    async def set_pin_all(request):
+        pin = await read_pin(request)
+        for rid in portal.rooms:
+            portal.set_pin(rid, pin)
+        return _json([room_row(rid) for rid in portal.rooms])
 
     @routes.post("/api/reload")
     async def reload(_request):

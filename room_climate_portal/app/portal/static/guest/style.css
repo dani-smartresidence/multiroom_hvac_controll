@@ -117,3 +117,13 @@ a{color:inherit;text-decoration:none}
 .spinner{width:36px;height:36px;border-radius:50%;border:3px solid var(--track);border-top-color:var(--heat);margin:0 auto 16px;animation:spin 1s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
 @media (max-width:350px){.big{font-size:52px}.btn{width:56px;height:56px}}
+.pin-card{text-align:center;padding:28px 20px 24px;margin-top:24px}
+.pin-ic{width:64px;height:64px;border-radius:50%;background:var(--pre-soft);display:flex;align-items:center;justify-content:center;margin:0 auto 16px}
+.pin-ic svg{stroke:var(--pre-ink)}
+.pin-card h2{font-size:20px;font-weight:700}
+.pin-help{font-size:14px;color:var(--muted);margin-top:6px;line-height:1.45}
+.pin-input{display:block;width:100%;max-width:240px;margin:22px auto 0;font:inherit;font-size:30px;letter-spacing:.5em;text-align:center;padding:12px 0 12px .5em;border-radius:14px;border:1px solid var(--line);background:var(--soft);color:var(--ink);outline:none}
+.pin-input:focus{border-color:var(--pre)}
+.pin-err{min-height:20px;margin-top:10px;font-size:13px;font-weight:600;color:var(--heat-ink)}
+.pin-btn{display:block;width:100%;max-width:240px;margin:6px auto 0;padding:14px;border-radius:14px;background:var(--heat);color:#fff;font-size:16px;font-weight:700}
+.pin-btn:disabled{opacity:.5}

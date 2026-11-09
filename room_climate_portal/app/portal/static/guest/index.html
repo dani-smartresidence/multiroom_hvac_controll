@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="__DEFAULT_LANG__" data-default-lang="__DEFAULT_LANG__">
+<html lang="__DEFAULT_LANG__" data-default-lang="__DEFAULT_LANG__" data-base="__BASE__">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
@@ -8,8 +8,8 @@
 <meta name="theme-color" content="#F4F2EE" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#121316" media="(prefers-color-scheme: dark)">
 <title>Climat cameră</title>
-<link rel="stylesheet" href="/static/style.css">
-<script src="/static/app.js" defer></script>
+<link rel="stylesheet" href="__BASE__/static/style.css">
+<script src="__BASE__/static/app.js" defer></script>
 </head>
 <body>
 <main id="app">
@@ -79,6 +79,26 @@
     </div>
     <div id="schedule-list"></div>
     <div class="foot" id="schedule-foot"></div>
+  </section>
+
+  <!-- PIN -->
+  <section id="view-pin" class="view content pin-view" hidden>
+    <header class="hdr">
+      <div>
+        <div class="eyebrow" id="pin-sub"></div>
+        <h1 id="pin-room"></h1>
+      </div>
+      <div class="right"><button class="lang" id="lang-btn-2" type="button" aria-label="Language"><b data-lang="ro">RO</b> · <b data-lang="en">EN</b></button></div>
+    </header>
+    <form class="card pin-card" id="pin-form" autocomplete="off">
+      <div class="pin-ic"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke-width="1.8" aria-hidden="true"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></div>
+      <h2 data-i18n="pin_title"></h2>
+      <p class="pin-help" data-i18n="pin_body"></p>
+      <input id="pin-input" class="pin-input" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="8" minlength="4" autocomplete="one-time-code" aria-label="PIN" required>
+      <div class="pin-err" id="pin-err" role="alert"></div>
+      <button class="pin-btn" type="submit" id="pin-submit" data-i18n="pin_submit"></button>
+    </form>
+    <div class="foot" id="pin-help-text"></div>
   </section>
 
   <!-- Invalid code -->

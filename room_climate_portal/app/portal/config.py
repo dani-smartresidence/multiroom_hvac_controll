@@ -7,9 +7,16 @@ from dataclasses import dataclass, field, fields
 from pathlib import Path
 
 
+def normalize_base(value: str | None) -> str:
+    """'/camera', 'camera/', '' -> '/camera', '/camera', ''."""
+    value = (value or "").strip().strip("/")
+    return f"/{value}" if value else ""
+
+
 @dataclass
 class Options:
     public_url: str = "http://homeassistant.local:8080"
+    base_path: str = "/camera"
     default_language: str = "ro"
     room_label: str = "qr_room"
     lead_time_label: str = "precondition_lead"
@@ -26,6 +33,9 @@ class Options:
     max_changes_per_hour: int = 60
     trust_proxy_headers: bool = False
     help_text: str = "Întrebați la recepție."
+    pin_remember_hours: int = 24
+    pin_max_attempts: int = 5
+    pin_lockout_minutes: int = 10
 
     @classmethod
     def load(cls, path: Path) -> "Options":
@@ -35,6 +45,7 @@ class Options:
         known = {f.name for f in fields(cls)}
         opts = cls(**{k: v for k, v in data.items() if k in known and v is not None})
         opts.public_url = opts.public_url.rstrip("/")
+        opts.base_path = normalize_base(opts.base_path)
         if opts.default_language not in ("ro", "en"):
             opts.default_language = "ro"
         return opts
@@ -56,6 +67,10 @@ class Paths:
     @property
     def audit(self) -> Path:
         return self.data / "audit.jsonl"
+
+    @property
+    def pins(self) -> Path:
+        return self.data / "pins.json"
 
     @property
     def rooms_override(self) -> Path:

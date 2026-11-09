@@ -1,5 +1,5 @@
 name: Room Climate Portal
-version: "0.1.0"
+version: "0.2.0"
 slug: room_climate_portal
 description: Per-room thermostat pages opened by scanning a QR code in each room
 url: https://github.com/dani-smartresidence/multiroom_hvac_controll
@@ -21,7 +21,8 @@ ports_description:
 map:
   - addon_config:rw
 options:
-  public_url: "http://homeassistant.local:8080"
+  public_url: "https://ha.example.ro"
+  base_path: /camera
   default_language: ro
   room_label: qr_room
   lead_time_label: precondition_lead
@@ -38,8 +39,12 @@ options:
   max_changes_per_hour: 60
   trust_proxy_headers: false
   help_text: "Întrebați la recepție."
+  pin_remember_hours: 24
+  pin_max_attempts: 5
+  pin_lockout_minutes: 10
 schema:
   public_url: url
+  base_path: str
   default_language: list(ro|en)
   room_label: str
   lead_time_label: str
@@ -56,3 +61,6 @@ schema:
   max_changes_per_hour: int(1,10000)
   trust_proxy_headers: bool
   help_text: str?
+  pin_remember_hours: int(1,720)
+  pin_max_attempts: int(1,20)
+  pin_lockout_minutes: int(1,1440)

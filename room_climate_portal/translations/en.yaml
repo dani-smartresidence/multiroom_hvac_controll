@@ -1,7 +1,10 @@
 configuration:
   public_url:
     name: Public URL
-    description: Base address phones use to reach the guest port (printed into the QR codes), e.g. https://climate.example.ro
+    description: Address phones use, without the path, e.g. https://ha.voxdomini.ro. QR codes point to <public_url><base_path>/<code>.
+  base_path:
+    name: Base path
+    description: Path all room pages live under, e.g. /camera. Your reverse proxy forwards this path to the add-on's port 8080.
   default_language:
     name: Default page language
     description: Language the room page opens in. Guests can switch between Romanian and English.
@@ -48,5 +51,12 @@ configuration:
   help_text:
     name: Help text
     description: Shown on the "code no longer active" page, e.g. "Întrebați la recepție sau sunați la interiorul 100."
+  pin_remember_hours:
+    name: Remember PIN (hours)
+    description: How long a phone stays unlocked after entering the room PIN. PINs are set per room on the admin page.
+  pin_max_attempts:
+    name: Wrong PIN attempts before lockout
+  pin_lockout_minutes:
+    name: Lockout (minutes)
 network:
   8080/tcp: Guest pages opened from the room QR codes

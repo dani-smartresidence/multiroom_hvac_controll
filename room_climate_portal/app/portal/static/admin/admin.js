@@ -21,7 +21,10 @@
       "<td>" + (ev ? esc(ev.summary) + "<div class=\"muted\">" + time(ev.start) + "</div><div class=\"muted\">precondition " + time(ev.precondition_start) + "</div>" : "<span class=\"muted\">none</span>") + "</td>" +
       "<td><a href=\"print?room=" + encodeURIComponent(r.id) + "\" target=\"_blank\" rel=\"noopener\"><img class=\"qr\" alt=\"QR\" src=\"qr/" + encodeURIComponent(r.id) + ".svg?g=" + r.generation + "\"></a>" +
       "<div class=\"url\">" + esc(r.url) + "</div><div class=\"muted\">" + r.open_pages + " open now</div></td>" +
-      "<td><button class=\"small\" data-rotate=\"" + esc(r.id) + "\">New code</button></td></tr>";
+      "<td><div>" + (r.pin_enabled ? "<b>On</b>" : "<span class=\"muted\">Off</span>") + "</div>" +
+      "<div class=\"btns\"><button class=\"small\" data-pin=\"" + esc(r.id) + "\">" + (r.pin_enabled ? "Change PIN" : "Set PIN") + "</button>" +
+      (r.pin_enabled ? "<button class=\"small\" data-nopin=\"" + esc(r.id) + "\">Remove PIN</button>" : "") +
+      "<button class=\"small\" data-rotate=\"" + esc(r.id) + "\">New QR code</button></div></td></tr>";
   }
 
   function load() {
@@ -50,12 +53,41 @@
     });
   }
 
+  function askPin(label) {
+    var pin = prompt(label + "\nEnter a 4-8 digit PIN (leave empty to remove the PIN):", "");
+    if (pin === null) return null;
+    pin = pin.trim();
+    if (pin && !/^\d{4,8}$/.test(pin)) { alert("The PIN must be 4 to 8 digits."); return null; }
+    return { pin: pin || null };
+  }
+  function postJson(url, body) {
+    return fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })
+      .then(function (r) { if (!r.ok) return r.text().then(function (t) { alert("Failed: " + t); }); });
+  }
+
   document.addEventListener("click", function (ev) {
+    var p = ev.target.closest("[data-pin]");
+    if (p) {
+      var v = askPin("PIN for room " + p.getAttribute("data-pin") + ".");
+      if (v) postJson("api/rooms/" + encodeURIComponent(p.getAttribute("data-pin")) + "/pin", v).then(load);
+      return;
+    }
+    var n = ev.target.closest("[data-nopin]");
+    if (n) {
+      if (confirm("Remove the PIN for " + n.getAttribute("data-nopin") + "? Anyone with the QR code can then change the temperature.")) {
+        postJson("api/rooms/" + encodeURIComponent(n.getAttribute("data-nopin")) + "/pin", { pin: null }).then(load);
+      }
+      return;
+    }
     var b = ev.target.closest("[data-rotate]");
     if (!b) return;
     var id = b.getAttribute("data-rotate");
     if (!confirm("Replace the QR code for " + id + "? The printed code stops working immediately.")) return;
     fetch("api/rooms/" + encodeURIComponent(id) + "/rotate", { method: "POST" }).then(load);
+  });
+  $("#pin-all").addEventListener("click", function () {
+    var v = askPin("Same PIN for ALL rooms (replaces every room's PIN).");
+    if (v) postJson("api/pin_all", v).then(load);
   });
   $("#reload").addEventListener("click", function () {
     this.disabled = true;

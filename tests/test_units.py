@@ -83,3 +83,11 @@ def test_discover_from_fake_registry():
     assert rooms["camera_101"].lead_time == "sensor.camera_101_precondition_minutes"  # by name
     assert "missing_calendar" in rooms["camera_102"].issues
     assert rooms["camera_102"].max_temp == 23 and rooms["camera_102"].subtitle == "Birou"
+
+
+def test_normalize_base():
+    from portal.config import normalize_base
+    assert normalize_base("/camera") == "/camera"
+    assert normalize_base("camera/") == "/camera"
+    assert normalize_base("") == ""
+    assert normalize_base("/") == ""

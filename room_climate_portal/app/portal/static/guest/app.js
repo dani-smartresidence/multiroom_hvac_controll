@@ -24,7 +24,10 @@
       invalid_title: "Acest cod QR nu mai este activ",
       invalid_body: "Codul acestei camere a fost înlocuit. Scanați codul QR de pe placa din interiorul camerei.",
       need_help: "Aveți nevoie de ajutor?", starting: "Sistemul pornește, reîncercăm…",
-      title: "Climat cameră"
+      title: "Climat cameră",
+      pin_title: "Introduceți codul PIN", pin_body: "Codul PIN al camerei este necesar pentru a controla temperatura.",
+      pin_submit: "Continuă", pin_wrong: "PIN greșit. Mai aveți {n} încercări.",
+      pin_locked: "Prea multe încercări. Reîncercați peste {m} min.", pin_short: "PIN-ul are între 4 și 8 cifre."
     },
     en: {
       loading: "Loading…", live: "Live", offline: "Reconnecting…", target: "Target", now: "Now",
@@ -47,7 +50,10 @@
       invalid_title: "This QR code is no longer active",
       invalid_body: "The code for this room was replaced. Please scan the QR code on the wall plate inside the room.",
       need_help: "Need help?", starting: "System is starting, retrying…",
-      title: "Room climate"
+      title: "Room climate",
+      pin_title: "Enter the PIN", pin_body: "The room PIN is required to control the temperature.",
+      pin_submit: "Continue", pin_wrong: "Wrong PIN. {n} attempts left.",
+      pin_locked: "Too many attempts. Try again in {m} min.", pin_short: "The PIN has 4 to 8 digits."
     }
   };
 
@@ -55,8 +61,10 @@
   var DEBOUNCE_MS = 800;
   var SCHEDULE_DAYS = 7;
 
-  var token = (location.pathname.match(/\/r\/([A-Za-z0-9_-]{8,64})/) || [])[1] || "";
-  var api = "/api/r/" + token;
+  var BASE = document.documentElement.getAttribute("data-base") || "";
+  var token = (location.pathname.slice(BASE.length).match(/^\/([A-Za-z0-9_-]{16,64})\/?$/) || [])[1] || "";
+  var api = BASE + "/api/" + token;
+  var pinInfo = null;
   var room = null;
   var pending = null;        // setpoint the guest has chosen but HA has not confirmed
   var awaiting = null;       // value sent, waiting for HA to echo it
@@ -115,7 +123,7 @@
 
   // ------------------------------------------------------------------ views
   function show(name) {
-    ["loading", "control", "schedule", "invalid"].forEach(function (v) { $("view-" + v).hidden = v !== name; });
+    ["loading", "control", "schedule", "invalid", "pin"].forEach(function (v) { $("view-" + v).hidden = v !== name; });
   }
   function route() {
     if (!room) return;
@@ -126,7 +134,7 @@
     document.documentElement.lang = lang;
     document.title = (room ? room.name + " · " : "") + t("title");
     document.querySelectorAll("[data-i18n]").forEach(function (el) { el.textContent = t(el.getAttribute("data-i18n")); });
-    document.querySelectorAll("#lang-btn b").forEach(function (b) { b.classList.toggle("on", b.getAttribute("data-lang") === lang); });
+    document.querySelectorAll(".lang b").forEach(function (b) { b.classList.toggle("on", b.getAttribute("data-lang") === lang); });
   }
 
   // ------------------------------------------------------------------ render
@@ -311,6 +319,7 @@
         pending = null; awaiting = null; undoValue = null;
         showToast(esc(res.status === 429 ? t("err_rate") : (res.status === 0 ? t("err_offline") : t("err_generic"))), false, true);
         if (res.status === 404) return showInvalid();
+        if (res.status === 401) return load();
       }
       renderControl();
     });
@@ -319,7 +328,7 @@
   function post(path, body) {
     return fetch(api + path, {
       method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
-      credentials: "omit", cache: "no-store"
+      credentials: "same-origin", cache: "no-store"
     }).then(function (r) {
       return r.json().catch(function () { return {}; }).then(function (b) { return { ok: r.ok, status: r.status, body: b }; });
     }).catch(function () { return { ok: false, status: 0, body: {} }; });
@@ -363,8 +372,9 @@
 
   function load() {
     if (!token) return showInvalid();
-    fetch(api, { cache: "no-store", credentials: "omit" }).then(function (r) {
+    fetch(api, { cache: "no-store", credentials: "same-origin" }).then(function (r) {
       if (r.status === 404) return r.json().catch(function () { return {}; }).then(function (b) { showInvalid(b.help_text); });
+      if (r.status === 401) return r.json().catch(function () { return {}; }).then(showPin);
       if (r.status === 503) { $("view-loading").querySelector("p").textContent = t("starting"); return setTimeout(load, 5000); }
       if (!r.ok) throw new Error("http " + r.status);
       return r.json().then(function (data) { onRoom(data); connect(); });
@@ -378,7 +388,7 @@
     es.onmessage = function (ev) {
       var msg; try { msg = JSON.parse(ev.data); } catch (e) { return; }
       if (msg.type === "room") onRoom(msg.room);
-      else if (msg.type === "revoked") load();
+      else if (msg.type === "revoked" || msg.type === "reauth") { if (es) { es.close(); es = null; } load(); }
     };
     es.onerror = function () {
       if (!room) return;
@@ -388,15 +398,50 @@
     };
   }
 
+  // ------------------------------------------------------------------ PIN
+  function showPin(info) {
+    if (es) { es.close(); es = null; }
+    room = null;
+    pinInfo = info || {};
+    applyStaticText();
+    $("pin-room").textContent = pinInfo.name || "";
+    $("pin-sub").textContent = pinInfo.subtitle || "";
+    $("pin-help-text").textContent = pinInfo.help_text || "";
+    $("pin-err").textContent = "";
+    $("pin-input").value = "";
+    show("pin");
+    setTimeout(function () { $("pin-input").focus(); }, 50);
+  }
+
+  function submitPin(ev) {
+    ev.preventDefault();
+    var pin = $("pin-input").value.replace(/\D/g, "");
+    if (pin.length < 4 || pin.length > 8) { $("pin-err").textContent = t("pin_short"); return; }
+    $("pin-submit").disabled = true;
+    post("/pin", { pin: pin }).then(function (res) {
+      $("pin-submit").disabled = false;
+      $("pin-input").value = "";
+      if (res.ok) { $("pin-err").textContent = ""; show("loading"); return load(); }
+      if (res.status === 429) $("pin-err").textContent = t("pin_locked", { m: Math.max(1, Math.ceil((res.body.retry_after || 60) / 60)) });
+      else if (res.status === 403) $("pin-err").textContent = t("pin_wrong", { n: res.body.attempts_left });
+      else if (res.status === 404) showInvalid(res.body.help_text);
+      else $("pin-err").textContent = t("err_offline");
+      $("pin-input").focus();
+    });
+  }
+
   // ------------------------------------------------------------------ wire up
   $("plus").addEventListener("click", function () { step(1); });
   $("minus").addEventListener("click", function () { step(-1); });
   $("toast-undo").addEventListener("click", undo);
-  $("lang-btn").addEventListener("click", function () {
+  function toggleLang() {
     lang = lang === "ro" ? "en" : "ro";
     try { localStorage.setItem("rcp-lang", lang); } catch (e) { /* ignore */ }
-    render();
-  });
+    if (room) render(); else applyStaticText();
+  }
+  $("lang-btn").addEventListener("click", toggleLang);
+  $("lang-btn-2").addEventListener("click", toggleLang);
+  $("pin-form").addEventListener("submit", submitPin);
   $("modes").addEventListener("click", function (ev) {
     var b = ev.target.closest("button[data-mode]");
     if (!b) return;

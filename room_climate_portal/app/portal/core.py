@@ -11,6 +11,7 @@ from zoneinfo import ZoneInfo
 from .audit import AuditLog
 from .config import Options, Paths
 from .ha import HAClient, HAError
+from .pins import PinStore
 from .rooms import Room, clamp_setpoint, discover, load_overrides
 from .schedule import build_events, lead_minutes_from_state, next_precondition
 from .tokens import TokenStore
@@ -38,6 +39,13 @@ class Portal:
         self.ha = ha
         self.tokens = TokenStore(paths.tokens)
         self.audit = AuditLog(paths.audit)
+        self.pins = PinStore(
+            paths.pins,
+            self.tokens,
+            remember_hours=options.pin_remember_hours,
+            max_attempts=options.pin_max_attempts,
+            lockout_minutes=options.pin_lockout_minutes,
+        )
         self.rooms: dict[str, Room] = {}
         self.states: dict[str, dict] = {}
         self.schedules: dict[str, list[dict]] = {}
@@ -335,4 +343,10 @@ class Portal:
         return self.tokens.resolve(token, self.rooms.keys())
 
     def room_url(self, room_id: str) -> str:
-        return f"{self.options.public_url}/r/{self.tokens.token_for(room_id)}"
+        return f"{self.options.public_url}{self.options.base_path}/{self.tokens.token_for(room_id)}"
+
+    def set_pin(self, room_id: str, pin: str | None) -> None:
+        self.pins.set_pin(room_id, pin)
+        self.audit.write(room=room_id, action="pin_set" if pin else "pin_removed", client="admin")
+        # Phones holding a session for the old PIN must enter the new one.
+        self.broadcast(room_id, {"type": "reauth"})

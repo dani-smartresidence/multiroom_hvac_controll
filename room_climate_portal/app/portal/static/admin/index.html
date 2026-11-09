@@ -15,13 +15,14 @@
     <p class="sub" id="status">Loading…</p>
   </div>
   <div class="actions">
+    <button type="button" id="pin-all">PIN for all rooms</button>
     <button type="button" id="reload">Re-scan rooms</button>
     <a class="button primary" href="print" target="_blank" rel="noopener">Print all QR codes</a>
   </div>
 </header>
 <main>
   <table id="rooms">
-    <thead><tr><th>Room</th><th>Thermostat</th><th>Now / target</th><th>Calendar &amp; lead time</th><th>Next event</th><th>QR code</th><th></th></tr></thead>
+    <thead><tr><th>Room</th><th>Thermostat</th><th>Now / target</th><th>Calendar &amp; lead time</th><th>Next event</th><th>QR code</th><th>PIN</th></tr></thead>
     <tbody></tbody>
   </table>
   <p class="empty" id="empty" hidden>No rooms found. Put the label <code id="label"></code> on each room's Area in Home Assistant (Settings → Areas), or list rooms in <code>/addon_configs/…room_climate_portal/rooms.yaml</code>, then press “Re-scan rooms”.</p>

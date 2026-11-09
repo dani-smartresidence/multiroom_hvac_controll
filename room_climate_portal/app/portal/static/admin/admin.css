@@ -24,3 +24,4 @@ code,.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12p
 .dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;background:var(--warn)}
 .dot.on{background:var(--ok)}
 @media (max-width:900px){thead{display:none}table,tbody,tr,td{display:block;width:100%}tr{border-bottom:1px solid var(--line)}td{border:0;padding:6px 12px}}
+.btns{display:flex;flex-direction:column;gap:6px;margin-top:6px;align-items:flex-start}
