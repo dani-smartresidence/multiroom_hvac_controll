@@ -485,8 +485,8 @@ def build_admin_app(portal: Portal) -> web.Application:
 
     @routes.get("/print")
     async def print_sheet(request):
-        only = request.query.get("room")
-        ids = [only] if only in portal.rooms else list(portal.rooms)
+        wanted = [r for r in (request.query.get("room") or request.query.get("rooms") or "").split(",") if r in portal.rooms]
+        ids = wanted or sorted(portal.rooms, key=lambda r: (portal.rooms[r].subtitle, portal.rooms[r].name))
         cards = []
         for rid in ids:
             room = portal.rooms[rid]

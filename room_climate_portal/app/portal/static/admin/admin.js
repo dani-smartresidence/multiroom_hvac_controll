@@ -39,6 +39,10 @@
     var shown = ROOMS.filter(function (r) { return matches(r, words); });
     $("#rooms tbody").innerHTML = shown.map(row).join("") ||
       '<tr class="nomatch"><td colspan="7">No room matches. <button type="button" class="small" id="clear">Clear search</button></td></tr>';
+    var ps = $("#print-shown");
+    ps.hidden = !shown.length || shown.length === ROOMS.length;
+    ps.textContent = "Print shown (" + shown.length + ")";
+    ps.href = "print?auto=1&rooms=" + encodeURIComponent(shown.map(function (r) { return r.id; }).join(","));
     $("#count").textContent = shown.length === ROOMS.length ? ROOMS.length + " rooms" : shown.length + " of " + ROOMS.length + " rooms";
     document.querySelectorAll("#chips button").forEach(function (b) {
       var f = b.getAttribute("data-f");
@@ -158,7 +162,7 @@
         (r.planned ? '<div class="muted">' + r.planned + " planned</div>" : "") + "</td>" +
       "<td class=\"mono c-x\"><div class=\"mlbl\">Calendar &amp; lead time</div>" + esc(r.calendar || "–") + "<div>" + esc(r.lead_time || "default") + " → " + esc(r.lead_minutes) + " min</div></td>" +
       "<td class=\"c-x\"><div class=\"mlbl\">Next event</div>" + (ev ? esc(ev.summary) + "<div class=\"muted\">" + time(ev.start) + "</div><div class=\"muted\">precondition " + time(ev.precondition_start) + "</div>" : "<span class=\"muted\">none</span>") + "</td>" +
-      "<td class=\"c-x c-qr\"><div class=\"mlbl\">QR code</div><a href=\"print?room=" + encodeURIComponent(r.id) + "\" target=\"_blank\" rel=\"noopener\"><img class=\"qr\" alt=\"QR\" src=\"qr/" + encodeURIComponent(r.id) + ".svg?g=" + r.generation + "&c=" + encodeURIComponent(r.url.split("/").pop()) + "\"></a>" +
+      "<td class=\"c-x c-qr\"><div class=\"mlbl\">QR code</div><a href=\"print?auto=1&room=" + encodeURIComponent(r.id) + "\" target=\"_blank\" rel=\"noopener\"><img class=\"qr\" alt=\"QR\" src=\"qr/" + encodeURIComponent(r.id) + ".svg?g=" + r.generation + "&c=" + encodeURIComponent(r.url.split("/").pop()) + "\"></a>" +
       "<div class=\"url\">" + esc(r.url) + " <b>(" + esc(r.code_kind || "random") + ")</b></div>" +
         (r.code_kind !== "random" && !r.pin_enabled ? '<div class="issue">Easy-to-guess link: set a PIN</div>' : "") + "<div class=\"muted\">" + r.open_pages + " open now</div></td>" +
       "<td class=\"c-x\"><div class=\"mlbl\">PIN &amp; code</div><div>" + (r.pin_enabled ? "<b>On</b>" : "<span class=\"muted\">Off</span>") + "</div>" +

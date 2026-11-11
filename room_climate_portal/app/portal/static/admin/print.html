@@ -11,7 +11,8 @@ body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;c
 .bar button{font:inherit;font-weight:600;padding:8px 14px;border-radius:10px;border:0;background:#E8692E;color:#fff;cursor:pointer}
 .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8mm}
 .card{border:1px dashed #BDB7AD;border-radius:6mm;padding:6mm 5mm;text-align:center;break-inside:avoid;page-break-inside:avoid}
-.qr svg{width:42mm;height:42mm;display:block;margin:0 auto}
+.qr svg{width:40mm;height:40mm;display:block;margin:0 auto}
+*{-webkit-print-color-adjust:exact;print-color-adjust:exact}
 .name{font-size:16pt;font-weight:700;margin-top:3mm}
 .sub{font-size:9pt;color:#6B6F76;min-height:11pt}
 .hint{font-size:9pt;margin-top:2mm}
@@ -20,9 +21,13 @@ body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;c
 </style>
 </head>
 <body>
-<div class="bar"><span>Decupați pe linia punctată · Cut along the dashed line</span><button type="button" onclick="window.print()">Print</button></div>
+<div class="bar"><span>Decupați pe linia punctată · Cut along the dashed line · QR 4 × 4 cm (print at 100% / "Actual size")</span><button type="button" id="print">Print</button></div>
 <div class="grid">
 __CARDS__
 </div>
+<script>
+document.getElementById("print").addEventListener("click", function () { window.print(); });
+if (/[?&]auto=1/.test(location.search)) window.addEventListener("load", function () { setTimeout(function () { window.print(); }, 300); });
+</script>
 </body>
 </html>

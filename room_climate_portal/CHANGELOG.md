@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.2
+- QR codes on the print sheet are exactly 4 × 4 cm (print at 100% / "Actual size").
+- **Print all QR codes** opens the sheet and the print dialog at once; rooms sorted by floor and name.
+- **Print shown (n)** prints only the rooms matching the current search/filter. Clicking a room's QR prints just that room.
+
 ## 0.6.1
 - Fix: QR codes on the print sheet could not be scanned. The sheet shrank the code without scaling it, so
   only its top-left part was printed. Codes now scale to their box, have the standard white quiet zone and a
