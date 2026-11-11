@@ -129,7 +129,12 @@ Periods are stored in `/data/holds.json` and survive restarts and updates.
 
 ## 7. Custom codes
 
-By default each room gets a random 22-character code. **Custom code** on the admin page lets you choose it,
+By default each room's link is built from its floor and name, e.g. Area *D01 - Sala sport* on floor
+*Demisol* → `https://camera.voxdomini.ro/room/demisol-d01-sala-sport` (accents removed, lower case; a
+number is added if two rooms would get the same link). The code is fixed when the room is first seen, so
+renaming the area later does not break the printed QR code; **Readable code** rebuilds it from the current
+name. Readable links are easy to guess, so give those rooms a PIN, or set `readable_codes: false` to use a
+random 22-character code instead. **Custom code** on the admin page lets you choose it,
 e.g. `sala-102` → `https://camera.voxdomini.ro/camera/sala-102`. Codes must be unique and use 4-64 letters,
 digits, `-` or `_`. A short or guessable code (like the room number) can be tried by anyone, so give such
 rooms a PIN. **New random code** replaces a custom code with a random one. Either change stops the old printed code.

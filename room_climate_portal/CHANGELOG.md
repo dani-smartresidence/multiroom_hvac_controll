@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.0
+- QR links are now readable by default, built from the floor and the room name:
+  `…/room/demisol-d01-sala-repetitii-inchinare` (accents removed, lower case, unique per room).
+  QR codes printed earlier keep working until you replace that room's code. Reprint to get the new links.
+- The readable code is fixed when a room is first seen, so renaming an area in HA does not break the sticker.
+  **Readable code** on the admin page rebuilds it from the current name.
+- Readable links can be guessed by anyone who knows the room name: the admin page flags rooms without a PIN.
+  Option `readable_codes: false` goes back to random codes.
+
 ## 0.5.1
 - Admin page on phones (HA app): one card per room with large − / + buttons and the mode menu up front,
   a "Details" button for thermostat, calendar, next event, QR code and PIN/code actions, a sticky search

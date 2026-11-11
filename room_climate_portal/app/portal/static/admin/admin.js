@@ -158,12 +158,14 @@
         (r.planned ? '<div class="muted">' + r.planned + " planned</div>" : "") + "</td>" +
       "<td class=\"mono c-x\"><div class=\"mlbl\">Calendar &amp; lead time</div>" + esc(r.calendar || "–") + "<div>" + esc(r.lead_time || "default") + " → " + esc(r.lead_minutes) + " min</div></td>" +
       "<td class=\"c-x\"><div class=\"mlbl\">Next event</div>" + (ev ? esc(ev.summary) + "<div class=\"muted\">" + time(ev.start) + "</div><div class=\"muted\">precondition " + time(ev.precondition_start) + "</div>" : "<span class=\"muted\">none</span>") + "</td>" +
-      "<td class=\"c-x c-qr\"><div class=\"mlbl\">QR code</div><a href=\"print?room=" + encodeURIComponent(r.id) + "\" target=\"_blank\" rel=\"noopener\"><img class=\"qr\" alt=\"QR\" src=\"qr/" + encodeURIComponent(r.id) + ".svg?g=" + r.generation + "\"></a>" +
-      "<div class=\"url\">" + esc(r.url) + (r.custom_code ? " <b>(custom)</b>" : "") + "</div><div class=\"muted\">" + r.open_pages + " open now</div></td>" +
+      "<td class=\"c-x c-qr\"><div class=\"mlbl\">QR code</div><a href=\"print?room=" + encodeURIComponent(r.id) + "\" target=\"_blank\" rel=\"noopener\"><img class=\"qr\" alt=\"QR\" src=\"qr/" + encodeURIComponent(r.id) + ".svg?g=" + r.generation + "&c=" + encodeURIComponent(r.url.split("/").pop()) + "\"></a>" +
+      "<div class=\"url\">" + esc(r.url) + " <b>(" + esc(r.code_kind || "random") + ")</b></div>" +
+        (r.code_kind !== "random" && !r.pin_enabled ? '<div class="issue">Easy-to-guess link: set a PIN</div>' : "") + "<div class=\"muted\">" + r.open_pages + " open now</div></td>" +
       "<td class=\"c-x\"><div class=\"mlbl\">PIN &amp; code</div><div>" + (r.pin_enabled ? "<b>On</b>" : "<span class=\"muted\">Off</span>") + "</div>" +
       "<div class=\"btns\"><button class=\"small\" data-pin=\"" + esc(r.id) + "\">" + (r.pin_enabled ? "Change PIN" : "Set PIN") + "</button>" +
       (r.pin_enabled ? "<button class=\"small\" data-nopin=\"" + esc(r.id) + "\">Remove PIN</button>" : "") +
-      "<button class=\"small\" data-code=\"" + esc(r.id) + "\" data-current=\"" + esc(r.custom_code ? r.url.split("/").pop() : "") + "\">Custom code</button>" +
+      "<button class=\"small\" data-code=\"" + esc(r.id) + "\" data-current=\"" + esc(r.code_kind !== "random" ? r.url.split("/").pop() : "") + "\">Custom code</button>" +
+      (r.readable_codes && r.code_kind !== "readable" ? "<button class=\"small\" data-readable=\"" + esc(r.id) + "\">Readable code</button>" : "") +
       "<button class=\"small\" data-rotate=\"" + esc(r.id) + "\">New random code</button></div></td></tr>";
   }
 
@@ -189,7 +191,9 @@
     });
     fetch("api/audit?limit=50").then(function (r) { return r.json(); }).then(function (rows) {
       $("#audit tbody").innerHTML = rows.map(function (a) {
-        var change = a.action === "set_hvac_mode" ? "Mode " + esc(a.old) + " → " + esc(a.new)
+        var change = a.action === "code_readable" ? "Readable QR code"
+          : a.action === "code_custom" ? "Custom QR code"
+          : a.action === "set_hvac_mode" ? "Mode " + esc(a.old) + " → " + esc(a.new)
           : a.action === "set_temperature" ? num(a.old) + " → " + num(a.new) + " °C"
           : a.action === "rotate_token" ? "QR code replaced"
           : a.action === "heating_on" ? "Manual heating on, " + num(a.new) + " °C until " + hm(a.until)
@@ -297,6 +301,16 @@
         okLabel: "Save code",
         validate: function (v) { return /^[A-Za-z0-9_-]{4,64}$/.test(v) ? null : "Use 4 to 64 letters, digits, - or _."; },
         onOk: function (v) { return postJson("api/rooms/" + encodeURIComponent(cid) + "/code", { code: v }); }
+      });
+    }
+    var rd = ev.target.closest("[data-readable]");
+    if (rd) {
+      var rid2 = rd.getAttribute("data-readable");
+      return dialog({
+        title: "Readable code for " + rid2 + "?",
+        text: "The link is rebuilt from the room's floor and name in Home Assistant, e.g. …/demisol-d01-sala-sport. The current printed code stops working. Anyone who knows the room name can guess this link, so set a PIN too.",
+        okLabel: "Use readable code",
+        onOk: function () { return postJson("api/rooms/" + encodeURIComponent(rid2) + "/readable", {}); }
       });
     }
     var b = ev.target.closest("[data-rotate]");

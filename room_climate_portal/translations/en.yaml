@@ -68,6 +68,9 @@ configuration:
     description: "Used only for rooms where you never set temperature or mode on the admin page. off turns the thermostat off; setback keeps it on at the setback temperature."
   setback_temp:
     name: Setback temperature (°C)
+  readable_codes:
+    name: Readable QR links
+    description: "Room links built from the floor and room name, e.g. /room/demisol-d01-sala-sport, instead of a random code. Anyone who knows a room's name can guess its link, so give such rooms a PIN. Off = random codes."
   restore_after_events:
     name: Restore room settings after calendar events
     description: When an event's heating ends (or the event is deleted), set the thermostat back to the temperature and mode chosen on the admin page.

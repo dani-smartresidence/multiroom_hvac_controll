@@ -325,6 +325,8 @@ def build_admin_app(portal: Portal) -> web.Application:
             "open_pages": portal.watcher_count(rid),
             "pin_enabled": portal.pins.enabled(rid),
             "custom_code": portal.tokens.is_custom(rid),
+            "code_kind": portal.tokens.kind(rid),
+            "readable_codes": portal.tokens.readable,
             "hold": next((h for h in snap["holds"] if h["active"]), None),
             "planned": len([h for h in snap["holds"] if not h["active"]]),
             "default": portal.defaults.get(rid),
@@ -394,6 +396,15 @@ def build_admin_app(portal: Portal) -> web.Application:
         except CodeError as err:
             return _json({"error": str(err)}, 400)
         portal.audit.write(room=rid, action="code_custom" if code else "rotate_token", client="admin")
+        portal.broadcast(rid, {"type": "revoked"})
+        return _json(room_row(rid))
+
+    @routes.post("/api/rooms/{room_id}/readable")
+    async def set_readable(request):
+        rid = get_room(request)
+        room = portal.rooms[rid]
+        portal.tokens.use_readable(rid, room.subtitle, room.name)
+        portal.audit.write(room=rid, action="code_readable", client="admin")
         portal.broadcast(rid, {"type": "revoked"})
         return _json(room_row(rid))
 

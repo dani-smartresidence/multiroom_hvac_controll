@@ -40,6 +40,7 @@ class Options:
     hold_max_hours: int = 12
     hold_end_action: str = "off"
     setback_temp: float = 16.0
+    readable_codes: bool = True
     restore_after_events: bool = True
 
     @classmethod

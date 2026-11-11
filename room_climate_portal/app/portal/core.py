@@ -47,7 +47,7 @@ class Portal:
         self.options = options
         self.paths = paths
         self.ha = ha
-        self.tokens = TokenStore(paths.tokens)
+        self.tokens = TokenStore(paths.tokens, readable=options.readable_codes)
         self.audit = AuditLog(paths.audit)
         self.pins = PinStore(
             paths.pins,
@@ -117,6 +117,7 @@ class Portal:
             overrides=load_overrides(self.paths.rooms_override),
             options=self.options,
         )
+        self.tokens.assign_readable({r.id: (r.subtitle, r.name) for r in self.rooms.values()})
         index: dict[str, set[str]] = defaultdict(set)
         for room in self.rooms.values():
             for ent in room.entities:

@@ -136,3 +136,28 @@ def test_parse_hhmm_and_hold_store(tmp_path):
     store.check_planned("r1", parse_hhmm("20:00", now, tz), parse_hhmm("21:00", now, tz))
     store.check_planned("r2", parse_hhmm("19:00", now, tz), parse_hhmm("21:00", now, tz))
     assert len(HoldStore(tmp_path / "holds.json").for_room("r1")) == 1  # persisted
+
+
+def test_readable_codes(tmp_path):
+    from portal.tokens import slugify
+    assert slugify("Demisol D01 - Sala repetiții închinare") == "demisol-d01-sala-repetitii-inchinare"
+    assert slugify("107- Sală tehnică răcire") == "107-sala-tehnica-racire"
+    store = TokenStore(tmp_path / "t.json", readable=True)
+    old_random = store.token_for("d01")  # before the room was seen: random
+    store.assign_readable({"d01": ("Demisol", "D01 - Sala sport"), "d02": ("Demisol", "D01 - Sala sport"), "x": ("", "P")})
+    assert store.token_for("d01") == "demisol-d01-sala-sport"
+    assert store.token_for("d02") == "demisol-d01-sala-sport-2"
+    assert len(store.token_for("x")) >= 4
+    rooms = ["d01", "d02", "x"]
+    assert store.resolve("demisol-d01-sala-sport", rooms) == "d01"
+    assert store.resolve("Demisol-D01-Sala-Sport", rooms) == "d01"
+    assert store.resolve(old_random, rooms) == "d01"  # old printed sticker still works
+    # Renaming the area does not change the code; "Readable code" rebuilds it.
+    store.assign_readable({"d01": ("Demisol", "D01 - Sala mare")})
+    assert TokenStore(tmp_path / "t.json", readable=True).token_for("d01") == "demisol-d01-sala-sport"
+    new = store.use_readable("d01", "Demisol", "D01 - Sala mare")
+    assert new == "demisol-d01-sala-mare" and store.resolve("demisol-d01-sala-sport", rooms) is None
+    # New random code revokes the readable one.
+    rnd = store.rotate("d01")
+    assert store.kind("d01") == "random" and store.resolve("demisol-d01-sala-mare", rooms) is None
+    assert store.resolve(rnd, rooms) == "d01"
