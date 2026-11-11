@@ -295,7 +295,12 @@ async def ingress_only(request: web.Request, handler):
 
 def qr_svg(url: str, scale: int = 6) -> str:
     buf = io.BytesIO()
-    segno.make(url, error="m").save(buf, kind="svg", scale=scale, border=2, xmldecl=False, svgns=True)
+    # omitsize: a viewBox instead of fixed width/height, so the code scales to whatever size the page gives it
+    # (with a fixed size, the print sheet cut the code off and phones could not read it).
+    # border=4 is the quiet zone scanners expect; the white background keeps it readable in dark mode.
+    segno.make(url, error="m").save(
+        buf, kind="svg", scale=scale, border=4, dark="#000", light="#fff", xmldecl=False, svgns=True, omitsize=True
+    )
     return buf.getvalue().decode()
 
 

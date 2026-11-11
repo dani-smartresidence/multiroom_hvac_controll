@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.1
+- Fix: QR codes on the print sheet could not be scanned. The sheet shrank the code without scaling it, so
+  only its top-left part was printed. Codes now scale to their box, have the standard white quiet zone and a
+  white background (also in dark mode). Reprint any sheets printed before.
+
 ## 0.6.0
 - QR links are now readable by default, built from the floor and the room name:
   `…/room/demisol-d01-sala-repetitii-inchinare` (accents removed, lower case, unique per room).

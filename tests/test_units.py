@@ -161,3 +161,10 @@ def test_readable_codes(tmp_path):
     rnd = store.rotate("d01")
     assert store.kind("d01") == "random" and store.resolve("demisol-d01-sala-mare", rooms) is None
     assert store.resolve(rnd, rooms) == "d01"
+
+
+def test_qr_svg_scales():
+    from portal.web import qr_svg
+    svg = qr_svg("https://camera.example.ro/room/demisol-d01-sala-sport", 8)
+    head = svg[: svg.index(">")]
+    assert "viewBox" in head and "width=" not in head  # scales to the box the page gives it
