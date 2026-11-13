@@ -345,7 +345,7 @@ async def test_timer_end_restores_admin_settings(env):
     fake, portal, guest, admin = env
     await admin.post("/api/rooms/camera_102/temperature", json={"temperature": 19})
     row = await (await admin.post("/api/rooms/camera_102/mode", json={"hvac_mode": "heat"})).json()
-    assert row["default"] == {"hvac_mode": "heat", "temperature": 19}
+    assert row["default"] == {"hvac_mode": "heat", "temperature": 19, "preset_mode": ""}
     tok = portal.tokens.token_for("camera_102")
     await guest.post(f"/camera/api/{tok}/hold", json={"action": "start", "minutes": 60, "temperature": 23})
     await asyncio.sleep(0.1)
@@ -375,3 +375,29 @@ async def test_event_end_restores_admin_settings(env):
     await asyncio.sleep(0.1)
     assert fake.states["climate.camera_204"]["state"] == "off"
     assert not portal._running_events
+
+
+async def test_admin_preset_and_restore(env):
+    fake, portal, guest, admin = env
+    rows = {r["id"]: r for r in await (await admin.get("/api/rooms")).json()}
+    assert rows["camera_101"]["preset_modes"] == ["none", "away", "eco", "comfort"]
+    assert rows["camera_204"]["preset_modes"] == []
+    r = await admin.post("/api/rooms/camera_101/preset", json={"preset_mode": "away"})
+    row = await r.json()
+    assert r.status == 200 and row["preset_mode"] == "away"
+    assert row["default"]["preset_mode"] == "away" and row["default"]["hvac_mode"] == "heat"
+    assert (await admin.post("/api/rooms/camera_101/preset", json={"preset_mode": "party"})).status == 400
+    # Manual heating, then the timer ends: back to the away preset.
+    tok = portal.tokens.token_for("camera_101")
+    await guest.post(f"/camera/api/{tok}/hold", json={"action": "start", "minutes": 60, "temperature": 23})
+    await asyncio.sleep(0.1)
+    await fake.set_state("climate.camera_101_trv", "heat", dict(fake.states["climate.camera_101_trv"]["attributes"], preset_mode="none"))
+    await asyncio.sleep(0.1)
+    _set_end(portal, "camera_101", -1)
+    await portal.process_holds()
+    await asyncio.sleep(0.1)
+    assert fake.states["climate.camera_101_trv"]["attributes"]["preset_mode"] == "away"
+    assert portal.audit.tail(1)[0]["preset"] == "away"
+    # A temperature set on the admin page replaces the remembered preset.
+    row = await (await admin.post("/api/rooms/camera_101/temperature", json={"temperature": 20})).json()
+    assert row["default"]["preset_mode"] == "" and row["default"]["temperature"] == 20

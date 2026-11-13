@@ -101,7 +101,9 @@ select.mode{margin-top:6px;font:inherit;font-size:12px;padding:5px 8px;border-ra
   .stepper{margin-top:0;gap:10px}
   .stepper button{width:44px;height:44px;font-size:22px}
   .stepper b{font-size:20px;min-width:84px}
-  .tctl select.mode{margin-top:0;font-size:15px;padding:10px 12px;border-radius:10px;min-width:96px}
+  .tctl select.mode{margin-top:0;font-size:15px;padding:10px 12px;border-radius:10px;min-width:96px;flex:1}
+  .tctl{flex-wrap:wrap}
+  .tctl .stepper{flex:1 0 100%;justify-content:space-between}
   .after{max-width:none;margin-top:10px;font-size:13px}
   .c-qr{text-align:left}
   .qr{width:120px;height:120px}

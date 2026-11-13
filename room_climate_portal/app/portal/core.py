@@ -269,6 +269,8 @@ class Portal:
                 "available": bool(cl) and cl.get("state") not in ("unavailable", "unknown"),
                 "hvac_mode": cl.get("state"),
                 "hvac_modes": attrs.get("hvac_modes") or [],
+                "preset_mode": attrs.get("preset_mode"),
+                "preset_modes": attrs.get("preset_modes") or [],
                 "hvac_action": attrs.get("hvac_action"),
                 "current": num(attrs.get("current_temperature")),
                 "target": num(attrs.get("temperature")),
@@ -347,7 +349,12 @@ class Portal:
         await self.ha.call_service("climate", "set_temperature", data, entity_id=room.climate)
         self.audit.write(room=room_id, action="set_temperature", old=old, new=target, client=client)
         if admin:
-            self.defaults.update(room_id, temperature=target, hvac_mode=st.get("state") if st.get("state") in modes_of(attrs) else None)
+            self.defaults.update(
+                room_id,
+                temperature=target,
+                hvac_mode=st.get("state") if st.get("state") in modes_of(attrs) else None,
+                preset_mode="",  # a manual setpoint replaces the preset on most thermostats
+            )
         hold = self.holds.active(room_id)
         if hold:
             hold["target"] = target
@@ -417,9 +424,20 @@ class Portal:
         default = self.defaults.get(room.id)
         if default and default.get("hvac_mode") in modes_of(st.get("attributes") or {}):
             mode, temp = default["hvac_mode"], default.get("temperature")
+            preset = default.get("preset_mode") or ""
+            if preset not in ((st.get("attributes") or {}).get("preset_modes") or []):
+                preset = ""
             if mode == "off":
                 await self.ha.call_service("climate", "set_hvac_mode", {"hvac_mode": "off"}, entity_id=room.climate)
+            elif preset and preset != "none":
+                # The preset brings its own temperature (e.g. away), so only the mode and the preset are set.
+                await self.ha.call_service("climate", "set_hvac_mode", {"hvac_mode": mode}, entity_id=room.climate)
+                await self.ha.call_service("climate", "set_preset_mode", {"preset_mode": preset}, entity_id=room.climate)
+                self.audit.write(room=room.id, action="restore_default", mode=mode, preset=preset, reason=reason, client="timer")
+                return
             else:
+                if preset == "none" and (st.get("attributes") or {}).get("preset_mode") not in (None, "none"):
+                    await self.ha.call_service("climate", "set_preset_mode", {"preset_mode": "none"}, entity_id=room.climate)
                 data: dict = {"hvac_mode": mode}
                 if isinstance(temp, (int, float)):
                     data["temperature"] = clamp_setpoint(room, temp, st.get("attributes") or {})
@@ -596,6 +614,22 @@ class Portal:
             self.holds.remove(active["id"])
         self.broadcast(room_id, {"type": "room", "room": self.snapshot(room_id)})
         return mode
+
+    async def set_preset(self, room_id: str, preset: str, client: str) -> str:
+        """Admin page: thermostat preset (away, eco, comfort, ...). Remembered as part of the room settings."""
+        room = self.rooms[room_id]
+        if not room.climate:
+            raise PermissionError("no thermostat")
+        st = self.states.get(room.climate) or {}
+        attrs = st.get("attributes") or {}
+        if preset not in (attrs.get("preset_modes") or []):
+            raise ValueError("unsupported preset")
+        await self.ha.call_service("climate", "set_preset_mode", {"preset_mode": preset}, entity_id=room.climate)
+        self.audit.write(room=room_id, action="set_preset", old=attrs.get("preset_mode"), new=preset, client=client)
+        mode = st.get("state") if st.get("state") in modes_of(attrs) else None
+        self.defaults.update(room_id, preset_mode=preset, hvac_mode=mode)
+        self.broadcast(room_id, {"type": "room", "room": self.snapshot(room_id)})
+        return preset
 
     # ------------------------------------------------------------------ tokens
     def room_for_token(self, token: str) -> str | None:

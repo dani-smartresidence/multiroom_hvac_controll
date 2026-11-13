@@ -320,6 +320,8 @@ def build_admin_app(portal: Portal) -> web.Application:
             "target": snap["climate"]["target"],
             "hvac_mode": snap["climate"]["hvac_mode"],
             "hvac_modes": snap["climate"]["hvac_modes"],
+            "preset_mode": snap["climate"]["preset_mode"],
+            "preset_modes": snap["climate"]["preset_modes"],
             "hvac_action": snap["climate"]["hvac_action"],
             "available": snap["climate"]["available"],
             "set_min": snap["climate"]["min"],
@@ -449,6 +451,21 @@ def build_admin_app(portal: Portal) -> web.Application:
             return _json({"error": "This room has no thermostat"}, 400)
         except ValueError:
             return _json({"error": "The thermostat does not support this mode"}, 400)
+        except HAError as err:
+            return _json({"error": f"Home Assistant: {err.message}"}, 502)
+        await asyncio.sleep(0.3)
+        return _json(room_row(rid))
+
+    @routes.post("/api/rooms/{room_id}/preset")
+    async def admin_preset(request):
+        rid = get_room(request)
+        data = await admin_body(request)
+        try:
+            await portal.set_preset(rid, str(data.get("preset_mode", "")), "admin")
+        except PermissionError:
+            return _json({"error": "This room has no thermostat"}, 400)
+        except ValueError:
+            return _json({"error": "The thermostat does not support this preset"}, 400)
         except HAError as err:
             return _json({"error": f"Home Assistant: {err.message}"}, 502)
         await asyncio.sleep(0.3)

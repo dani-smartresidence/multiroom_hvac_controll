@@ -85,11 +85,25 @@
       return '<option value="' + esc(m) + '"' + (m === r.hvac_mode ? " selected" : "") + ">" + esc(MODE_LABEL[m] || m) + "</option>";
     }).join("");
     var sel = modes ? '<select class="mode" data-mode="' + esc(r.id) + '" aria-label="Mode">' + modes + "</select>" : "";
+    var presets = r.preset_modes || [];
+    if (presets.length) {
+      var cur = r.preset_mode || "none";
+      var opts = presets.slice();
+      if (opts.indexOf(cur) === -1) opts.unshift(cur);
+      sel += '<select class="mode preset" data-preset="' + esc(r.id) + '" aria-label="Preset">' + opts.map(function (p) {
+        return '<option value="' + esc(p) + '"' + (p === cur ? " selected" : "") + ">" + esc(presetLabel(p)) + "</option>";
+      }).join("") + "</select>";
+    }
     var d = r.default, after;
-    if (d && d.hvac_mode) after = "After events &amp; timers: <b>" + esc(MODE_LABEL[d.hvac_mode] || d.hvac_mode) + "</b>" + (d.hvac_mode !== "off" && d.temperature != null ? " · <b>" + num(d.temperature) + " °C</b>" : "");
+    var dp = d && d.preset_mode && d.preset_mode !== "none" ? d.preset_mode : "";
+    if (d && d.hvac_mode) after = "After events &amp; timers: <b>" + esc(MODE_LABEL[d.hvac_mode] || d.hvac_mode) + "</b>" +
+      (d.hvac_mode !== "off" && dp ? " · preset <b>" + esc(presetLabel(dp)) + "</b>" : (d.hvac_mode !== "off" && d.temperature != null ? " · <b>" + num(d.temperature) + " °C</b>" : ""));
     else after = "After events &amp; timers: " + (r.fallback === "setback" ? "setback " + num(r.setback_temp) + " °C" : "Off") + " <span class=\"muted\">(not set here yet)</span>";
     return now + '<div class="tctl">' + stepper + sel + "</div>" + '<div class="after">' + after + "</div>";
   }
+  var PRESET_LABEL = { none: "No preset", away: "Away", eco: "Eco", comfort: "Comfort", home: "Home", sleep: "Sleep",
+    boost: "Boost", activity: "Activity" };
+  function presetLabel(p) { return PRESET_LABEL[p] || (p.charAt(0).toUpperCase() + p.slice(1).replace(/_/g, " ")); }
   function roomById(id) { return ROOMS.filter(function (r) { return r.id === id; })[0]; }
   function replaceRoom(updated) {
     ROOMS = ROOMS.map(function (r) { return r.id === updated.id ? updated : r; });
@@ -134,6 +148,18 @@
     }, 700);
   }
   document.addEventListener("change", function (ev) {
+    var ps = ev.target.closest("select[data-preset]");
+    if (ps) {
+      var pid = ps.getAttribute("data-preset"), pr = roomById(pid), preset = ps.value;
+      ps.disabled = true;
+      return sendRoom(pid, "preset", { preset_mode: preset }).then(function (row) {
+        replaceRoom(row);
+        flash(row.name + ": preset " + presetLabel(preset));
+      }).catch(function (e) {
+        renderRooms();
+        flash((pr ? pr.name : pid) + ": " + e.message);
+      });
+    }
     var s = ev.target.closest("select[data-mode]");
     if (!s) return;
     var id = s.getAttribute("data-mode"), r = roomById(id), mode = s.value;
@@ -195,7 +221,8 @@
     });
     fetch("api/audit?limit=50").then(function (r) { return r.json(); }).then(function (rows) {
       $("#audit tbody").innerHTML = rows.map(function (a) {
-        var change = a.action === "code_readable" ? "Readable QR code"
+        var change = a.action === "set_preset" ? "Preset " + esc(a.old || "none") + " → " + esc(a.new)
+          : a.action === "code_readable" ? "Readable QR code"
           : a.action === "code_custom" ? "Custom QR code"
           : a.action === "set_hvac_mode" ? "Mode " + esc(a.old) + " → " + esc(a.new)
           : a.action === "set_temperature" ? num(a.old) + " → " + num(a.new) + " °C"
@@ -206,7 +233,7 @@
           : a.action === "heating_plan_cancelled" ? "Planned period removed"
           : a.action === "heating_off" ? "Heating turned off (" + esc(a.reason) + ")"
           : a.action === "setback" ? "Setback to " + num(a.new) + " °C (" + esc(a.reason) + ")"
-          : a.action === "restore_default" ? "Back to room settings: " + esc(MODE_LABEL[a.mode] || a.mode) + (a.mode !== "off" && a.new != null ? " " + num(a.new) + " °C" : "") + " (" + esc(String(a.reason).replace("_", " ")) + ")"
+          : a.action === "restore_default" ? "Back to room settings: " + esc(MODE_LABEL[a.mode] || a.mode) + (a.preset ? " · preset " + esc(presetLabel(a.preset)) : (a.mode !== "off" && a.new != null ? " " + num(a.new) + " °C" : "")) + " (" + esc(String(a.reason).replace("_", " ")) + ")"
           : a.action === "hold_end_kept_for_event" ? "Manual heating ended, kept on for event"
           : esc(a.action) + " " + esc(a.new || "");
         return "<tr data-room=\"" + esc(a.room) + "\"><td class=\"a-time\">" + new Date(a.ts * 1000).toLocaleString([], { timeZone: TZ, dateStyle: "short", timeStyle: "short" }) + "</td><td class=\"a-room\">" + esc(a.room) + "</td><td class=\"a-change\">" + change + "</td><td class=\"mono a-client\">" + esc(a.client) + "</td></tr>";
@@ -342,7 +369,7 @@
   load();
   setInterval(function () {
     var a = document.activeElement;
-    if (a && a.matches && a.matches("select.mode")) return;  // don't close an open mode menu
+    if (a && a.matches && a.matches("select.mode")) return;  // also preset menus  // don't close an open mode menu
     load();
   }, 30000);
 })();

@@ -73,6 +73,7 @@ class FakeHA:
             "calendar.camera_101": {"entity_id": "calendar.camera_101", "state": "off", "attributes": {}},
         }
         n = now
+        self.states["climate.camera_101_trv"]["attributes"].update(preset_modes=["none", "away", "eco", "comfort"], preset_mode="none")
         self.calendars = {
             "calendar.camera_204": [
                 {"summary": "Ședința consiliului", "start": (n + timedelta(minutes=29)).replace(second=0, microsecond=0).isoformat(),
@@ -184,6 +185,16 @@ class FakeHA:
                 attrs = dict(st["attributes"], temperature=data["temperature"])
                 await ok({"context": {}})
                 await self.set_state(target, data.get("hvac_mode", st["state"]), attrs)
+                return
+            if dom == "climate" and svc == "set_preset_mode":
+                st = self.states[target]
+                if data["preset_mode"] not in st["attributes"].get("preset_modes", []):
+                    return await err("invalid", "bad preset")
+                await ok({"context": {}})
+                attrs = dict(st["attributes"], preset_mode=data["preset_mode"])
+                if data["preset_mode"] == "away":
+                    attrs["temperature"] = 16
+                await self.set_state(target, st["state"], attrs)
                 return
             if dom == "climate" and svc == "set_hvac_mode":
                 st = self.states[target]

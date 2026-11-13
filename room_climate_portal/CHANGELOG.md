@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.3
+- Admin page: a **Preset** menu next to the mode for thermostats that expose presets (away, eco, comfort, …).
+- The chosen preset is part of the room settings: after events and timers the thermostat goes back to that mode
+  and preset (e.g. Heat · Away). Setting a temperature on the admin page replaces the remembered preset.
+
 ## 0.6.2
 - QR codes on the print sheet are exactly 4 × 4 cm (print at 100% / "Actual size").
 - **Print all QR codes** opens the sheet and the print dialog at once; rooms sorted by floor and name.
