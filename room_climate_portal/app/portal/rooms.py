@@ -32,6 +32,7 @@ class Room:
     calendar: str | None = None
     lead_time: str | None = None
     humidity: str | None = None
+    temperature: str | None = None  # room temperature sensor, used when the thermostat reports none
     min_temp: float = 16.0
     max_temp: float = 25.0
     step: float = 0.5
@@ -40,7 +41,7 @@ class Room:
 
     @property
     def entities(self) -> set[str]:
-        return {e for e in (self.climate, self.calendar, self.lead_time, self.humidity) if e}
+        return {e for e in (self.climate, self.calendar, self.lead_time, self.humidity, self.temperature) if e}
 
     def as_dict(self) -> dict:
         return asdict(self)
@@ -139,6 +140,15 @@ def discover(
                 st = states.get(e["entity_id"]) or {}
                 if (st.get("attributes") or {}).get("device_class") == "humidity":
                     room.humidity = e["entity_id"]
+                    break
+
+        if ov.get("temperature"):
+            room.temperature = ov["temperature"]
+        else:
+            for e in of_domain("sensor"):
+                st = states.get(e["entity_id"]) or {}
+                if e["entity_id"] != options.outdoor_sensor and (st.get("attributes") or {}).get("device_class") == "temperature":
+                    room.temperature = e["entity_id"]
                     break
 
         if not room.climate:

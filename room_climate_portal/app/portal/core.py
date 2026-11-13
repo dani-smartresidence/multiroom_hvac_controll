@@ -258,6 +258,10 @@ class Portal:
             except (TypeError, ValueError):
                 return None
 
+        current = num(attrs.get("current_temperature"))
+        if current is None and room.temperature:
+            current = state_num(self.states.get(room.temperature))
+        heating_on, action_known = self._heating_on(room, cl, current)
         lo = max(room.min_temp, num(attrs.get("min_temp")) or room.min_temp)
         hi = min(room.max_temp, num(attrs.get("max_temp")) or room.max_temp)
         return {
@@ -273,7 +277,9 @@ class Portal:
                 "preset_mode": attrs.get("preset_mode"),
                 "preset_modes": attrs.get("preset_modes") or [],
                 "hvac_action": attrs.get("hvac_action"),
-                "current": num(attrs.get("current_temperature")),
+                "heating_on": heating_on,
+                "action_known": action_known,
+                "current": current,
                 "target": num(attrs.get("temperature")),
                 "min": lo,
                 "max": hi,
@@ -636,6 +642,26 @@ class Portal:
             self.holds.remove(active["id"])
         self.broadcast(room_id, {"type": "room", "room": self.snapshot(room_id)})
         return mode
+
+    def _heating_on(self, room: Room, cl: dict, current: float | None) -> tuple[bool, bool]:
+        """Is the room being heated? Uses hvac_action when the thermostat reports it; many TRVs don't,
+        so then it is inferred from the mode, the presets, manual heating and the temperatures."""
+        attrs = cl.get("attributes") or {}
+        action = attrs.get("hvac_action")
+        if action:
+            return action in ("heating", "preheating"), True
+        mode = cl.get("state")
+        if mode in (None, "off", "unavailable", "unknown", "cool", "dry", "fan_only"):
+            return False, False
+        preset = attrs.get("preset_mode")
+        if preset and preset == self.options.guest_preset_eco:
+            return False, False
+        if self.holds.active(room.id) or (preset and preset == self.options.guest_preset_heat):
+            return True, False
+        target = attrs.get("temperature")
+        if isinstance(target, (int, float)) and current is not None:
+            return current < float(target) - 0.1, False
+        return False, False
 
     def view_only(self, room_id: str) -> bool:
         return bool((self.access.get(room_id) or {}).get("view_only"))

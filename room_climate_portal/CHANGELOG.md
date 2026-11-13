@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.9.1
+- Thermostats that don't report whether they are heating (no `hvac_action`, common on TRVs): the room page no longer
+  says "Temperatură atinsă". Heating (and the warm glow, also on the admin page) is shown while Încălzire/manual heating
+  is on or the room is below target; with Eco active it says "Eco", otherwise "Pornit".
+- If the thermostat reports no room temperature, a temperature sensor in the same area is used for "Acum"
+  (or set `temperature:` per room in rooms.yaml).
+
 ## 0.9.0
 - **View only** per room (switch in the PIN column of the admin page) and **View only: all rooms** at the top.
   Guests still see the room page (temperature, heating, events) but every control is hidden and the server

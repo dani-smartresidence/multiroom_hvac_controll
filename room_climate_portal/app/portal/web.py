@@ -344,6 +344,8 @@ def build_admin_app(portal: Portal) -> web.Application:
             "preset_mode": snap["climate"]["preset_mode"],
             "preset_modes": snap["climate"]["preset_modes"],
             "hvac_action": snap["climate"]["hvac_action"],
+            "heating_on": snap["climate"]["heating_on"],
+            "action_known": snap["climate"]["action_known"],
             "available": snap["climate"]["available"],
             "set_min": snap["climate"]["min"],
             "set_max": snap["climate"]["max"],

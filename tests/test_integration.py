@@ -467,3 +467,22 @@ async def test_view_only_room(env):
     assert (await guest.post(f"/camera/api/{tok}/setpoint", json={"temperature": 21})).status == 200
     await admin.post("/api/view_only_all", json={"view_only": True})
     assert all(portal.view_only(r) for r in portal.rooms)
+
+
+async def test_heating_inferred_without_hvac_action(env):
+    fake, portal, guest, _ = env
+    attrs = dict(fake.states["climate.camera_101_trv"]["attributes"])
+    attrs.pop("hvac_action", None)
+    attrs.pop("current_temperature", None)
+    await fake.set_state("climate.camera_101_trv", "heat", dict(attrs, preset_mode="home"))
+    await asyncio.sleep(0.1)
+    tok = portal.tokens.token_for("camera_101")
+    c = (await (await guest.get(f"/camera/api/{tok}")).json())["climate"]
+    assert c["heating_on"] is True and c["action_known"] is False and c["current"] is None
+    await fake.set_state("climate.camera_101_trv", "heat", dict(attrs, preset_mode="away"))
+    await asyncio.sleep(0.1)
+    assert (await (await guest.get(f"/camera/api/{tok}")).json())["climate"]["heating_on"] is False
+    # Reported hvac_action always wins.
+    await fake.set_state("climate.camera_101_trv", "heat", dict(attrs, preset_mode="away", hvac_action="heating"))
+    await asyncio.sleep(0.1)
+    assert (await (await guest.get(f"/camera/api/{tok}")).json())["climate"]["heating_on"] is True

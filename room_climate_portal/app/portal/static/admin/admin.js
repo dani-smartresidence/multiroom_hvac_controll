@@ -75,7 +75,7 @@
   var PENDING = {}, TIMERS = {}, OPEN = {};
   var MODE_LABEL = { off: "Off", heat: "Heat", cool: "Cool", auto: "Auto", heat_cool: "Heat / cool", dry: "Dry", fan_only: "Fan" };
   var FLAME = '<svg width="13" height="13" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2c2 4 6 6 6 11a6 6 0 0 1-12 0c0-3 2-5 3-7 1 2 2 3 3 3 0-3-1-5 0-7z" fill="currentColor"/></svg>';
-  function isHeating(r) { return r.available && r.hvac_mode !== "off" && (r.hvac_action === "heating" || r.hvac_action === "preheating"); }
+  function isHeating(r) { return !!(r.available && r.hvac_mode !== "off" && r.heating_on); }
   function rangeText(r) {
     var t = "Range " + num(r.set_min) + "–" + num(r.set_max) + " °C";
     var lim = [];

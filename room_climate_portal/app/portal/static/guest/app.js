@@ -33,6 +33,7 @@
       hold_on_msg: "Se încheie automat la <b>{time}</b> · {left}", hold_on_msg_day: "Se încheie automat {day} la <b>{time}</b> · {left}",
       hold_off_title: "Pornește încălzirea", hold_off_msg: "Alegeți cât timp. Se încheie singură după {d}, dacă nu alegeți altceva.",
       hold_event_msg: "Programul camerei controlează acum încălzirea. Puteți porni și manual.",
+      on_state: "Pornit",
       view_only: "Doar vizualizare: temperatura acestei camere nu poate fi modificată de aici.",
       preset_heat: "Încălzire", preset_eco: "Eco", ok_preset_heat: "Încălzire pornită", ok_preset_eco: "Mod Eco activat",
       stop_now: "Încheie", off_at: "Încheie la", set: "Setează", or_until: "Sau până la", start: "Pornește",
@@ -78,6 +79,7 @@
       hold_on_msg: "Ends automatically at <b>{time}</b> · {left}", hold_on_msg_day: "Ends automatically {day} at <b>{time}</b> · {left}",
       hold_off_title: "Start heating", hold_off_msg: "Choose for how long. It ends by itself after {d} unless you choose otherwise.",
       hold_event_msg: "The room schedule is controlling the heating now. You can still start it manually.",
+      on_state: "On",
       view_only: "View only: this room's temperature cannot be changed here.",
       preset_heat: "Heating", preset_eco: "Eco", ok_preset_heat: "Heating on", ok_preset_eco: "Eco mode on",
       stop_now: "End now", off_at: "End at", set: "Set", or_until: "Or until", start: "Start",
@@ -210,11 +212,16 @@
     var label;
     if (!c.available) label = t("unavailable");
     else if (c.hvac_mode === "off") label = t("off");
-    else if (c.hvac_action === "heating" || c.hvac_action === "preheating") { label = t("heating"); action.classList.add("heating"); }
+    else if (c.heating_on) { label = t("heating"); action.classList.add("heating"); }
     else if (c.hvac_action === "cooling") { label = t("cooling"); action.classList.add("cooling"); }
     else if (c.hvac_action === "drying") label = t("drying");
     else if (c.hvac_action === "fan") label = t("fan");
-    else label = t("idle");
+    else if (c.action_known) label = t("idle");
+    else {
+      // The thermostat does not say whether it is heating: show the preset or just "on".
+      var ecoOn = (room.guest_presets || []).some(function (p) { return p.key === "eco" && p.on; });
+      label = ecoOn ? t("preset_eco") : t("on_state");
+    }
     var heatingNow = action.classList.contains("heating");
     $("dial-card").classList.toggle("is-heating", heatingNow);
     action.innerHTML = (heatingNow ? '<svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2c2 4 6 6 6 11a6 6 0 0 1-12 0c0-3 2-5 3-7 1 2 2 3 3 3 0-3-1-5 0-7z" fill="currentColor"/></svg>' : "") + esc(label);
