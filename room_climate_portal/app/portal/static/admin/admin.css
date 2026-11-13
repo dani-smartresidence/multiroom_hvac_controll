@@ -137,3 +137,22 @@ select.mode{margin-top:6px;font:inherit;font-size:12px;padding:5px 8px;border-ra
   #rooms tbody tr:last-child td:first-child{border-bottom-left-radius:12px}
   #rooms tbody tr:last-child td:last-child{border-bottom-right-radius:12px}
 }
+
+.th-sub{display:block;font-weight:500;text-transform:none;letter-spacing:0;font-size:11px}
+.c-now .ent{font-size:11px;margin-bottom:4px;word-break:break-all}
+.live-state{font-size:15px}
+.live-state.off b{color:var(--muted)}
+.pill{display:inline-block;font-size:12px;font-weight:600;padding:1px 8px;border-radius:999px;background:var(--warn-bg);color:var(--warn)}
+.live-cur{margin-top:2px}
+.act.heating,.act.preheating{color:var(--accent);font-weight:600}
+.small{font-size:12px}
+.c-temp{background:color-mix(in srgb,var(--accent) 5%,transparent)}
+.diff{color:var(--warn);font-weight:600}
+@media (min-width:901px){.c-now .mlbl,.c-temp .mlbl{display:none}}
+@media (max-width:900px){
+  #rooms td.c-now{order:1;padding-top:10px}
+  #rooms td.c-temp{order:1;margin:10px 14px 0;padding:10px 12px 12px;border-radius:12px;border:1px solid var(--line)}
+  #rooms tr:not(.open) td.c-temp{margin-bottom:14px;padding-bottom:12px}
+  #rooms tr.open td.c-temp{padding-bottom:12px}
+  .c-now .mlbl,.c-temp .mlbl{display:block}
+}

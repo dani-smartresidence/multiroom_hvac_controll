@@ -341,6 +341,8 @@ def build_admin_app(portal: Portal) -> web.Application:
             "available": snap["climate"]["available"],
             "set_min": snap["climate"]["min"],
             "set_max": snap["climate"]["max"],
+            "entity_min": (portal.states.get(room.climate or "") or {}).get("attributes", {}).get("min_temp"),
+            "entity_max": (portal.states.get(room.climate or "") or {}).get("attributes", {}).get("max_temp"),
             "step": snap["climate"]["step"],
             "lead_minutes": snap["lead_minutes"],
             "next_event": next((e for e in snap["events"] if not e["all_day"]), None),
@@ -353,6 +355,8 @@ def build_admin_app(portal: Portal) -> web.Application:
             "planned": len([h for h in snap["holds"] if not h["active"]]),
             "default": portal.defaults.get(rid),
             "fallback": portal.options.hold_end_action,
+            "manual_end": portal.options.manual_end,
+            "eco_preset": portal.options.guest_preset_eco,
             "setback_temp": portal.options.setback_temp,
         }
 

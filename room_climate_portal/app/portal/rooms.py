@@ -32,7 +32,7 @@ class Room:
     calendar: str | None = None
     lead_time: str | None = None
     humidity: str | None = None
-    min_temp: float = 18.0
+    min_temp: float = 16.0
     max_temp: float = 25.0
     step: float = 0.5
     allow_mode_change: bool = False

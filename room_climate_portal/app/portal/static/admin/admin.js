@@ -73,34 +73,63 @@
   // ------------------------------------------------------------ thermostat control
   var PENDING = {}, TIMERS = {}, OPEN = {};
   var MODE_LABEL = { off: "Off", heat: "Heat", cool: "Cool", auto: "Auto", heat_cool: "Heat / cool", dry: "Dry", fan_only: "Fan" };
+  function rangeText(r) {
+    var t = "Range " + num(r.set_min) + "–" + num(r.set_max) + " °C";
+    var lim = [];
+    if (r.entity_min != null && r.entity_min > r.min_temp) lim.push("thermostat min " + num(r.entity_min));
+    if (r.entity_max != null && r.entity_max < r.max_temp) lim.push("thermostat max " + num(r.entity_max));
+    return t + (lim.length ? " (limited by " + lim.join(", ") + ")" : "");
+  }
+  // Live state of the thermostat, read-only.
+  function nowCell(r) {
+    var html = '<div class="mlbl">Thermostat now</div><div class="mono muted ent">' + esc(r.climate || "no thermostat") + "</div>";
+    if (!r.climate) return html;
+    if (!r.available) return html + '<div class="live-state off">Unavailable</div>';
+    var mode = MODE_LABEL[r.hvac_mode] || r.hvac_mode || "–";
+    var preset = r.preset_mode && r.preset_mode !== "none" ? presetLabel(r.preset_mode) : "";
+    html += '<div class="live-state' + (r.hvac_mode === "off" ? " off" : "") + '"><b>' + esc(mode) + "</b>" +
+      (preset ? ' <span class="pill">' + esc(preset) + "</span>" : "") +
+      (r.hvac_mode !== "off" && r.target != null ? " · target <b>" + num(r.target) + " °C</b>" : "") + "</div>";
+    html += '<div class="live-cur">Room <b>' + num(r.current) + " °C</b>" + (r.hvac_action ? ' · <span class="act ' + esc(r.hvac_action) + '">' + esc(r.hvac_action) + "</span>" : "") + "</div>";
+    if (r.hold) html += '<div class="hold">' + (r.hold.kind === "planned" ? "Planned period" : "Guest manual heating") + " until " + hm(r.hold.end) + "</div>";
+    if (r.planned) html += '<div class="muted">' + r.planned + " planned</div>";
+    html += '<div class="muted small">' + esc(rangeText(r)) + "</div>";
+    return html;
+  }
+  // The room's saved settings: what the controls change, applied now and restored after events/timers.
   function climateCell(r) {
-    var now = '<div class="now">Now <b>' + num(r.current) + " °C</b>" + (r.hvac_action ? ' <span class="muted">· ' + esc(r.hvac_action) + "</span>" : "") + "</div>";
-    if (!r.climate || !r.available) return now + '<div class="muted">Thermostat unavailable</div>';
-    var shown = PENDING[r.id] != null ? PENDING[r.id] : r.target;
+    var head = '<div class="mlbl">Room settings</div>';
+    if (!r.climate || !r.available) return head + '<div class="muted">Thermostat unavailable</div>';
+    var d = r.default || {};
+    var saved = !!d.hvac_mode;
+    var temp = PENDING[r.id] != null ? PENDING[r.id] : (d.temperature != null ? d.temperature : r.target);
+    var mode = d.hvac_mode || r.hvac_mode;
+    var preset = saved ? (d.preset_mode || "none") : (r.preset_mode || "none");
     var stepper = '<div class="stepper' + (PENDING[r.id] != null ? " pending" : "") + '">' +
-      '<button type="button" class="small" data-temp="' + esc(r.id) + '" data-dir="-1"' + (shown != null && shown <= r.set_min ? " disabled" : "") + ' aria-label="Lower">−</button>' +
-      "<b>" + num(shown) + " °C</b>" +
-      '<button type="button" class="small" data-temp="' + esc(r.id) + '" data-dir="1"' + (shown != null && shown >= r.set_max ? " disabled" : "") + ' aria-label="Raise">+</button></div>';
+      '<button type="button" class="small" data-temp="' + esc(r.id) + '" data-dir="-1"' + (temp != null && temp <= r.set_min ? " disabled" : "") + ' aria-label="Lower">−</button>' +
+      "<b>" + num(temp) + " °C</b>" +
+      '<button type="button" class="small" data-temp="' + esc(r.id) + '" data-dir="1"' + (temp != null && temp >= r.set_max ? " disabled" : "") + ' aria-label="Raise">+</button></div>';
     var modes = (r.hvac_modes || []).map(function (m) {
-      return '<option value="' + esc(m) + '"' + (m === r.hvac_mode ? " selected" : "") + ">" + esc(MODE_LABEL[m] || m) + "</option>";
+      return '<option value="' + esc(m) + '"' + (m === mode ? " selected" : "") + ">" + esc(MODE_LABEL[m] || m) + "</option>";
     }).join("");
     var sel = modes ? '<select class="mode" data-mode="' + esc(r.id) + '" aria-label="Mode">' + modes + "</select>" : "";
     var presets = r.preset_modes || [];
     if (presets.length) {
-      var cur = r.preset_mode || "none";
       var opts = presets.slice();
-      if (opts.indexOf(cur) === -1) opts.unshift(cur);
+      if (opts.indexOf(preset) === -1) opts.unshift(preset);
       sel += '<select class="mode preset" data-preset="' + esc(r.id) + '" aria-label="Preset">' + opts.map(function (p) {
-        return '<option value="' + esc(p) + '"' + (p === cur ? " selected" : "") + ">" + esc(presetLabel(p)) + "</option>";
+        return '<option value="' + esc(p) + '"' + (p === preset ? " selected" : "") + ">" + esc(presetLabel(p)) + "</option>";
       }).join("") + "</select>";
     }
-    var d = r.default, after;
-    var dp = d && d.preset_mode && d.preset_mode !== "none" ? d.preset_mode : "";
-    if (d && d.hvac_mode) after = "After events &amp; timers: <b>" + esc(MODE_LABEL[d.hvac_mode] || d.hvac_mode) + "</b>" +
-      (d.hvac_mode !== "off" && dp ? " · preset <b>" + esc(presetLabel(dp)) + "</b>" : (d.hvac_mode !== "off" && d.temperature != null ? " · <b>" + num(d.temperature) + " °C</b>" : ""));
-    else after = "After events &amp; timers: " + (r.fallback === "setback" ? "setback " + num(r.setback_temp) + " °C" : "Off") + " <span class=\"muted\">(not set here yet)</span>";
-    return now + '<div class="tctl">' + stepper + sel + "</div>" + '<div class="after">' + after + "</div>";
+    var ecoEnd = r.manual_end === "eco" && presets.indexOf(r.eco_preset) !== -1;
+    var note = saved ? "Saved. Restored after calendar events" + (ecoEnd ? "; guest manual heating ends in Eco." : " and timers.") :
+      'Not saved yet: shows the live values. After events: ' + (r.fallback === "setback" ? "setback " + num(r.setback_temp) + " °C" : "Off") + ".";
+    var differs = saved && (d.hvac_mode !== r.hvac_mode || (d.preset_mode && d.preset_mode !== (r.preset_mode || "none")) ||
+      (!d.preset_mode && d.hvac_mode !== "off" && d.temperature != null && r.target != null && Math.abs(d.temperature - r.target) > 0.01));
+    if (differs) note += ' <span class="diff">Thermostat differs now' + (r.hold ? " (guest heating)" : "") + ".</span>";
+    return head + '<div class="tctl">' + stepper + sel + "</div>" + '<div class="after">' + note + "</div>";
   }
+
   var PRESET_LABEL = { none: "No preset", away: "Away", eco: "Eco", comfort: "Comfort", home: "Home", sleep: "Sleep",
     boost: "Boost", activity: "Activity" };
   function presetLabel(p) { return PRESET_LABEL[p] || (p.charAt(0).toUpperCase() + p.slice(1).replace(/_/g, " ")); }
@@ -182,10 +211,8 @@
         '<span class="m-only"> · ' + (r.pin_enabled ? "PIN on" : "no PIN") + "</span></div><div class=\"mono muted d-only\">" + esc(r.id) + "</div></div>" +
         '<button type="button" class="more m-only" data-more="' + esc(r.id) + '" aria-expanded="' + (open ? "true" : "false") + '">' + (open ? "Less ▴" : "Details ▾") + "</button></div>" +
         (issues ? "<div>" + issues + "</div>" : "") + "</td>" +
-      "<td class=\"mono c-x\"><div class=\"mlbl\">Thermostat</div>" + esc(r.climate || "–") + "<div class=\"muted\">" + esc(r.hvac_mode || "") + " · " + num(r.min_temp) + "–" + num(r.max_temp) + " °C</div></td>" +
-      "<td class=\"c-temp\">" + climateCell(r) +
-        (r.hold ? '<div class="hold">Manual until ' + hm(r.hold.end) + "</div>" : "") +
-        (r.planned ? '<div class="muted">' + r.planned + " planned</div>" : "") + "</td>" +
+      "<td class=\"c-now\">" + nowCell(r) + "</td>" +
+      "<td class=\"c-temp\">" + climateCell(r) + "</td>" +
       "<td class=\"mono c-x\"><div class=\"mlbl\">Calendar &amp; lead time</div>" + esc(r.calendar || "–") + "<div>" + esc(r.lead_time || "default") + " → " + esc(r.lead_minutes) + " min</div></td>" +
       "<td class=\"c-x\"><div class=\"mlbl\">Next event</div>" + (ev ? esc(ev.summary) + "<div class=\"muted\">" + time(ev.start) + "</div><div class=\"muted\">precondition " + time(ev.precondition_start) + "</div>" : "<span class=\"muted\">none</span>") + "</td>" +
       "<td class=\"c-x c-qr\"><div class=\"mlbl\">QR code</div><a href=\"print?auto=1&room=" + encodeURIComponent(r.id) + "\" target=\"_blank\" rel=\"noopener\"><img class=\"qr\" alt=\"QR\" src=\"qr/" + encodeURIComponent(r.id) + ".svg?g=" + r.generation + "&c=" + encodeURIComponent(r.url.split("/").pop()) + "\"></a>" +

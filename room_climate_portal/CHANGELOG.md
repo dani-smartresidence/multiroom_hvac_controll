@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.8.0
+- Admin page: two clear columns. **Thermostat now** (read-only live state: mode, preset, target, room temperature,
+  heating/idle, guest manual heating, effective range and whether the thermostat itself limits it) and
+  **Room settings** (the controls: saved settings, applied now and restored after events). It also says when the
+  thermostat currently differs from the saved settings.
+- Changing one room setting no longer copies the live state into the others (e.g. during guest heating).
+- Default `min_temp` is now 16 °C. Existing installs keep their saved value: change `min_temp` in the add-on Configuration.
+
 ## 0.7.1
 - When manual heating ends (timer or **Încheie**), the thermostat switches to the **Eco** preset (`away`).
   Rooms whose thermostat has no such preset go back to their admin-page settings, as before.

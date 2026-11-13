@@ -354,10 +354,11 @@ class Portal:
         await self.ha.call_service("climate", "set_temperature", data, entity_id=room.climate)
         self.audit.write(room=room_id, action="set_temperature", old=old, new=target, client=client)
         if admin:
+            saved = self.defaults.get(room_id) or {}
             self.defaults.update(
                 room_id,
                 temperature=target,
-                hvac_mode=st.get("state") if st.get("state") in modes_of(attrs) else None,
+                hvac_mode=saved.get("hvac_mode") or (st.get("state") if st.get("state") in modes_of(attrs) else None),
                 preset_mode="",  # a manual setpoint replaces the preset on most thermostats
             )
         hold = self.holds.active(room_id)
@@ -623,7 +624,10 @@ class Portal:
         await self.ha.call_service("climate", "set_hvac_mode", {"hvac_mode": mode}, entity_id=room.climate)
         self.audit.write(room=room_id, action="set_hvac_mode", old=st.get("state"), new=mode, client=client)
         if admin:
-            target = (st.get("attributes") or {}).get("temperature")
+            saved = self.defaults.get(room_id) or {}
+            target = saved.get("temperature")
+            if target is None:
+                target = (st.get("attributes") or {}).get("temperature")
             self.defaults.update(room_id, hvac_mode=mode, temperature=target if isinstance(target, (int, float)) else None)
         active = self.holds.active(room_id)
         if mode == "off" and active:
@@ -674,7 +678,8 @@ class Portal:
             raise ValueError("unsupported preset")
         await self.ha.call_service("climate", "set_preset_mode", {"preset_mode": preset}, entity_id=room.climate)
         self.audit.write(room=room_id, action="set_preset", old=attrs.get("preset_mode"), new=preset, client=client)
-        mode = st.get("state") if st.get("state") in modes_of(attrs) else None
+        saved = self.defaults.get(room_id) or {}
+        mode = saved.get("hvac_mode") or (st.get("state") if st.get("state") in modes_of(attrs) else None)
         self.defaults.update(room_id, preset_mode=preset, hvac_mode=mode)
         self.broadcast(room_id, {"type": "room", "room": self.snapshot(room_id)})
         return preset

@@ -53,7 +53,7 @@ async def test_room_snapshot(env):
     data = await r.json()
     assert data["name"] == "Camera 204"
     assert data["climate"]["current"] == 21.4 and data["climate"]["target"] == 22.5
-    assert data["climate"]["min"] == 18 and data["climate"]["max"] == 25
+    assert data["climate"]["min"] == 16 and data["climate"]["max"] == 25
     assert data["humidity"] == 44 and data["outdoor"] == 6
     assert data["lead_minutes"] == 45
     first = data["events"][0]

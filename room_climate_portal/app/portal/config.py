@@ -21,7 +21,7 @@ class Options:
     room_label: str = "qr_room"
     lead_time_label: str = "precondition_lead"
     outdoor_sensor: str = ""
-    min_temp: float = 18.0
+    min_temp: float = 16.0
     max_temp: float = 25.0
     temp_step: float = 0.5
     default_target_temp: float = 21.0
