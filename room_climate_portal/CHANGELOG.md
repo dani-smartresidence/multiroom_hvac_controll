@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.0
+- **View only** per room (switch in the PIN column of the admin page) and **View only: all rooms** at the top.
+  Guests still see the room page (temperature, heating, events) but every control is hidden and the server
+  refuses any change from the room page. The admin page can still change everything. New filter "View only".
+
 ## 0.8.1
 - Visual "heating on" effect. Room page: the thermostat card glows warm, the dial arc pulses and the flame flickers
   while the thermostat is heating. Admin page: heating rooms get an orange stripe and tint, a flickering flame next to

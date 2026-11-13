@@ -33,6 +33,7 @@
       hold_on_msg: "Se încheie automat la <b>{time}</b> · {left}", hold_on_msg_day: "Se încheie automat {day} la <b>{time}</b> · {left}",
       hold_off_title: "Pornește încălzirea", hold_off_msg: "Alegeți cât timp. Se încheie singură după {d}, dacă nu alegeți altceva.",
       hold_event_msg: "Programul camerei controlează acum încălzirea. Puteți porni și manual.",
+      view_only: "Doar vizualizare: temperatura acestei camere nu poate fi modificată de aici.",
       preset_heat: "Încălzire", preset_eco: "Eco", ok_preset_heat: "Încălzire pornită", ok_preset_eco: "Mod Eco activat",
       stop_now: "Încheie", off_at: "Încheie la", set: "Setează", or_until: "Sau până la", start: "Pornește",
       plan_period: "Programează o perioadă", from: "De la", to: "Până la", temperature: "Temperatură",
@@ -77,6 +78,7 @@
       hold_on_msg: "Ends automatically at <b>{time}</b> · {left}", hold_on_msg_day: "Ends automatically {day} at <b>{time}</b> · {left}",
       hold_off_title: "Start heating", hold_off_msg: "Choose for how long. It ends by itself after {d} unless you choose otherwise.",
       hold_event_msg: "The room schedule is controlling the heating now. You can still start it manually.",
+      view_only: "View only: this room's temperature cannot be changed here.",
       preset_heat: "Heating", preset_eco: "Eco", ok_preset_heat: "Heating on", ok_preset_eco: "Eco mode on",
       stop_now: "End now", off_at: "End at", set: "Set", or_until: "Or until", start: "Start",
       plan_period: "Plan a period", from: "From", to: "Until", temperature: "Temperature",
@@ -217,7 +219,10 @@
     $("dial-card").classList.toggle("is-heating", heatingNow);
     action.innerHTML = (heatingNow ? '<svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2c2 4 6 6 6 11a6 6 0 0 1-12 0c0-3 2-5 3-7 1 2 2 3 3 3 0-3-1-5 0-7z" fill="currentColor"/></svg>' : "") + esc(label);
 
-    var canChange = c.available && room.connected;
+    var canChange = c.available && room.connected && !room.view_only;
+    $("minus").hidden = $("plus").hidden = !!room.view_only;
+    $("viewonly").hidden = !room.view_only;
+    $("limits").hidden = !!room.view_only;
     $("minus").disabled = !canChange || shown <= c.min;
     $("plus").disabled = !canChange || shown >= c.max;
     $("limits").textContent = t("adjustable", { min: fmtStep(c.min), max: fmtStep(c.max), step: fmtStep(c.step) });
@@ -235,7 +240,9 @@
     var modes = $("modes");
     var gp = room.guest_presets || [];
     var guestModes = (c.hvac_modes || []).filter(function (m) { return m !== "off"; });  // off: admin page only
-    if (gp.length) {
+    if (room.view_only) {
+      modes.hidden = true;
+    } else if (gp.length) {
       modes.hidden = false;
       modes.className = "modes presets";
       modes.innerHTML = gp.map(function (p) {
@@ -529,6 +536,8 @@
   }
 
   function renderHold() {
+    $("hold").hidden = $("hold-sec").hidden = !!room.view_only;
+    if (room.view_only) return;
     var c = room.climate, h = activeHold(), now = Date.now();
     var usable = c.available && room.connected;
     $("hold-ic").classList.toggle("on", !!h);

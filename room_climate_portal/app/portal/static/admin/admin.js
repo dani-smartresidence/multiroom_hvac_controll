@@ -27,6 +27,7 @@
     event: function (r) { return r.next_event && new Date(r.next_event.start) - Date.now() < DAY; },
     pin: function (r) { return r.pin_enabled; },
     nopin: function (r) { return !r.pin_enabled; },
+    viewonly: function (r) { return !!r.view_only; },
     issues: function (r) { return (r.issues || []).length > 0; }
   };
   function matches(r, words) {
@@ -181,6 +182,15 @@
     }, 700);
   }
   document.addEventListener("change", function (ev) {
+    var vo = ev.target.closest("input[data-vo]");
+    if (vo) {
+      var vid = vo.getAttribute("data-vo"), want = vo.checked;
+      vo.disabled = true;
+      return sendRoom(vid, "view_only", { view_only: want }).then(function (row) {
+        replaceRoom(row);
+        flash(row.name + (want ? ": view only" : ": guests can change it again"));
+      }).catch(function (e) { renderRooms(); flash(e.message); });
+    }
     var ps = ev.target.closest("select[data-preset]");
     if (ps) {
       var pid = ps.getAttribute("data-preset"), pr = roomById(pid), preset = ps.value;
@@ -213,7 +223,7 @@
     var cls = (open ? "open " : "") + (isHeating(r) ? "heating" : "");
     return "<tr data-id=\"" + esc(r.id) + "\"" + (cls.trim() ? ' class="' + cls.trim() + '"' : "") + ">" +
       "<td class=\"c-room\"><div class=\"rhead\"><div><b class=\"rname\">" + esc(r.name) + (isHeating(r) ? ' <span class="flame" title="Heating">' + FLAME + "</span>" : "") + "</b><div class=\"muted\">" + esc(r.subtitle) +
-        '<span class="m-only"> · ' + (r.pin_enabled ? "PIN on" : "no PIN") + "</span></div><div class=\"mono muted d-only\">" + esc(r.id) + "</div></div>" +
+        '<span class="m-only"> · ' + (r.pin_enabled ? "PIN on" : "no PIN") + "</span>" + (r.view_only ? ' <span class="vo-tag">🔒 View only</span>' : "") + "</div><div class=\"mono muted d-only\">" + esc(r.id) + "</div></div>" +
         '<button type="button" class="more m-only" data-more="' + esc(r.id) + '" aria-expanded="' + (open ? "true" : "false") + '">' + (open ? "Less ▴" : "Details ▾") + "</button></div>" +
         (issues ? "<div>" + issues + "</div>" : "") + "</td>" +
       "<td class=\"c-now\">" + nowCell(r) + "</td>" +
@@ -224,6 +234,7 @@
       "<div class=\"url\">" + esc(r.url) + " <b>(" + esc(r.code_kind || "random") + ")</b></div>" +
         (r.code_kind !== "random" && !r.pin_enabled ? '<div class="issue">Easy-to-guess link: set a PIN</div>' : "") + "<div class=\"muted\">" + r.open_pages + " open now</div></td>" +
       "<td class=\"c-x\"><div class=\"mlbl\">PIN &amp; code</div><div>" + (r.pin_enabled ? "<b>On</b>" : "<span class=\"muted\">Off</span>") + "</div>" +
+      '<div class="vo"><label class="switch"><input type="checkbox" data-vo="' + esc(r.id) + '"' + (r.view_only ? " checked" : "") + '><span></span></label> View only <span class="muted">(guests see, can\'t change)</span></div>' +
       "<div class=\"btns\"><button class=\"small\" data-pin=\"" + esc(r.id) + "\">" + (r.pin_enabled ? "Change PIN" : "Set PIN") + "</button>" +
       (r.pin_enabled ? "<button class=\"small\" data-nopin=\"" + esc(r.id) + "\">Remove PIN</button>" : "") +
       "<button class=\"small\" data-code=\"" + esc(r.id) + "\" data-current=\"" + esc(r.code_kind !== "random" ? r.url.split("/").pop() : "") + "\">Custom code</button>" +
@@ -253,7 +264,9 @@
     });
     fetch("api/audit?limit=50").then(function (r) { return r.json(); }).then(function (rows) {
       $("#audit tbody").innerHTML = rows.map(function (a) {
-        var change = a.action === "set_preset" ? "Preset " + esc(a.old || "none") + " → " + esc(a.new)
+        var change = a.action === "view_only" ? "Room page set to view only"
+          : a.action === "changes_allowed" ? "Room page changes allowed"
+          : a.action === "set_preset" ? "Preset " + esc(a.old || "none") + " → " + esc(a.new)
           : a.action === "code_readable" ? "Readable QR code"
           : a.action === "code_custom" ? "Custom QR code"
           : a.action === "set_hvac_mode" ? "Mode " + esc(a.old) + " → " + esc(a.new)
@@ -384,6 +397,16 @@
       title: "New random code for " + id + "?", text: "Replaces the current code (also a custom one). The printed code stops working immediately. Print the new one afterwards.",
       okLabel: "New random code", danger: true,
       onOk: function () { return postJson("api/rooms/" + encodeURIComponent(id) + "/rotate", {}); }
+    });
+  });
+  $("#vo-all").addEventListener("click", function () {
+    var allLocked = ROOMS.length && ROOMS.every(function (r) { return r.view_only; });
+    dialog({
+      title: allLocked ? "Allow changes in all rooms?" : "View only for all rooms?",
+      text: allLocked ? "Guests can change temperature, presets and manual heating again in every room."
+        : "Guests can still open the room pages and see the status, but cannot change anything. You can still change everything here.",
+      okLabel: allLocked ? "Allow changes" : "Make all view only", danger: !allLocked,
+      onOk: function () { return postJson("api/view_only_all", { view_only: !allLocked }); }
     });
   });
   $("#pin-all").addEventListener("click", function () {

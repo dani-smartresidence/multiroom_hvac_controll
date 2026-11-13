@@ -70,6 +70,7 @@ class Portal:
         self.ready = False
         self.holds = HoldStore(paths.holds)
         self.defaults = DefaultsStore(paths.defaults)
+        self.access = DefaultsStore(paths.access)  # {room: {"view_only": bool}}
         self._running_events: dict[tuple, dict] = {}  # (room, start, summary) -> event, while it heats
         ha.on_connect = self._on_connect
         ha.on_disconnect = self._on_disconnect
@@ -291,6 +292,7 @@ class Portal:
             "hold_default_minutes": self.options.hold_default_minutes,
             "hold_max_hours": self.options.hold_max_hours,
             "default_target": min(max(self.options.default_target_temp, lo), hi),
+            "view_only": self.view_only(room.id),
             "guest_presets": [
                 {"key": key, "preset": preset, "on": attrs.get("preset_mode") == preset}
                 for key, preset in self._guest_presets().items()
@@ -634,6 +636,14 @@ class Portal:
             self.holds.remove(active["id"])
         self.broadcast(room_id, {"type": "room", "room": self.snapshot(room_id)})
         return mode
+
+    def view_only(self, room_id: str) -> bool:
+        return bool((self.access.get(room_id) or {}).get("view_only"))
+
+    def set_view_only(self, room_id: str, value: bool) -> None:
+        self.access.update(room_id, view_only=bool(value))
+        self.audit.write(room=room_id, action="view_only" if value else "changes_allowed", client="admin")
+        self.broadcast(room_id, {"type": "room", "room": self.snapshot(room_id)})
 
     def _guest_presets(self) -> dict[str, str]:
         return {"heat": self.options.guest_preset_heat, "eco": self.options.guest_preset_eco}

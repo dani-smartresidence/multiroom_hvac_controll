@@ -448,3 +448,22 @@ async def test_manual_end_goes_to_eco(env):
     await portal.process_holds()
     await asyncio.sleep(0.1)
     assert fake.states["climate.camera_102"]["attributes"]["temperature"] == 19
+
+
+async def test_view_only_room(env):
+    fake, portal, guest, admin = env
+    tok = portal.tokens.token_for("camera_101")
+    row = await (await admin.post("/api/rooms/camera_101/view_only", json={"view_only": True})).json()
+    assert row["view_only"] is True
+    data = await (await guest.get(f"/camera/api/{tok}")).json()
+    assert data["view_only"] is True and data["climate"]["current"] == 20.1  # status still visible
+    for path, body in (("setpoint", {"temperature": 22}), ("preset", {"preset": "heat"}),
+                       ("hold", {"action": "start"}), ("mode", {"hvac_mode": "heat"})):
+        r = await guest.post(f"/camera/api/{tok}/{path}", json=body)
+        assert r.status == 403 and (await r.json())["error"] == "view_only", path
+    # The admin can still change it.
+    assert (await admin.post("/api/rooms/camera_101/temperature", json={"temperature": 22})).status == 200
+    await admin.post("/api/view_only_all", json={"view_only": False})
+    assert (await guest.post(f"/camera/api/{tok}/setpoint", json={"temperature": 21})).status == 200
+    await admin.post("/api/view_only_all", json={"view_only": True})
+    assert all(portal.view_only(r) for r in portal.rooms)

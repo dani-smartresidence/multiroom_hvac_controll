@@ -121,6 +121,12 @@ def build_guest_app(portal: Portal) -> web.Application:
             )
         return room_id
 
+    def authorize_change(request: web.Request) -> str:
+        room_id = authorize(request)
+        if portal.view_only(room_id):
+            raise error(web.HTTPForbidden, {"error": "view_only"})
+        return room_id
+
     def is_https(request: web.Request) -> bool:
         if request.secure:
             return True
@@ -220,7 +226,7 @@ def build_guest_app(portal: Portal) -> web.Application:
 
     @routes.post(api + "/setpoint")
     async def setpoint(request):
-        room_id = authorize(request)
+        room_id = authorize_change(request)
         data = await _body(request)
         try:
             value = float(data.get("temperature"))
@@ -240,7 +246,7 @@ def build_guest_app(portal: Portal) -> web.Application:
 
     @routes.post(api + "/mode")
     async def mode(request):
-        room_id = authorize(request)
+        room_id = authorize_change(request)
         data = await _body(request)
         client = portal.tokens.client_id(client_ip(request, portal))
         try:
@@ -257,7 +263,7 @@ def build_guest_app(portal: Portal) -> web.Application:
 
     @routes.post(api + "/preset")
     async def guest_preset(request):
-        room_id = authorize(request)
+        room_id = authorize_change(request)
         data = await _body(request)
         client = portal.tokens.client_id(client_ip(request, portal))
         try:
@@ -272,7 +278,7 @@ def build_guest_app(portal: Portal) -> web.Application:
 
     @routes.post(api + "/hold")
     async def hold(request):
-        room_id = authorize(request)
+        room_id = authorize_change(request)
         data = await _body(request)
         client = portal.tokens.client_id(client_ip(request, portal))
         try:
@@ -348,6 +354,7 @@ def build_admin_app(portal: Portal) -> web.Application:
             "next_event": next((e for e in snap["events"] if not e["all_day"]), None),
             "open_pages": portal.watcher_count(rid),
             "pin_enabled": portal.pins.enabled(rid),
+            "view_only": portal.view_only(rid),
             "custom_code": portal.tokens.is_custom(rid),
             "code_kind": portal.tokens.kind(rid),
             "readable_codes": portal.tokens.readable,
@@ -495,6 +502,20 @@ def build_admin_app(portal: Portal) -> web.Application:
         rid = get_room(request)
         portal.set_pin(rid, await read_pin(request))
         return _json(room_row(rid))
+
+    @routes.post("/api/rooms/{room_id}/view_only")
+    async def set_view_only(request):
+        rid = get_room(request)
+        data = await admin_body(request)
+        portal.set_view_only(rid, bool(data.get("view_only")))
+        return _json(room_row(rid))
+
+    @routes.post("/api/view_only_all")
+    async def set_view_only_all(request):
+        data = await admin_body(request)
+        for rid in portal.rooms:
+            portal.set_view_only(rid, bool(data.get("view_only")))
+        return _json({"ok": True})
 
     @routes.post("/api/pin_all")
     async def set_pin_all(request):
