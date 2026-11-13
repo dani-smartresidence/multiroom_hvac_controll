@@ -486,3 +486,16 @@ async def test_heating_inferred_without_hvac_action(env):
     await fake.set_state("climate.camera_101_trv", "heat", dict(attrs, preset_mode="away", hvac_action="heating"))
     await asyncio.sleep(0.1)
     assert (await (await guest.get(f"/camera/api/{tok}")).json())["climate"]["heating_on"] is True
+
+
+async def test_heating_on_while_idle_with_manual_heating(env):
+    fake, portal, guest, _ = env
+    attrs = dict(fake.states["climate.camera_101_trv"]["attributes"], hvac_action="idle", preset_mode="none")
+    await fake.set_state("climate.camera_101_trv", "heat", attrs)
+    await asyncio.sleep(0.1)
+    tok = portal.tokens.token_for("camera_101")
+    assert (await (await guest.get(f"/camera/api/{tok}")).json())["climate"]["heating_on"] is False
+    await guest.post(f"/camera/api/{tok}/hold", json={"action": "start", "minutes": 60})
+    await fake.set_state("climate.camera_101_trv", "heat", dict(fake.states["climate.camera_101_trv"]["attributes"], hvac_action="idle"))
+    await asyncio.sleep(0.1)
+    assert (await (await guest.get(f"/camera/api/{tok}")).json())["climate"]["heating_on"] is True

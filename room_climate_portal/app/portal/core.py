@@ -648,16 +648,20 @@ class Portal:
         so then it is inferred from the mode, the presets, manual heating and the temperatures."""
         attrs = cl.get("attributes") or {}
         action = attrs.get("hvac_action")
-        if action:
-            return action in ("heating", "preheating"), True
+        if action in ("heating", "preheating"):
+            return True, True
         mode = cl.get("state")
         if mode in (None, "off", "unavailable", "unknown", "cool", "dry", "fan_only"):
-            return False, False
+            return False, bool(action)
         preset = attrs.get("preset_mode")
         if preset and preset == self.options.guest_preset_eco:
-            return False, False
+            return False, bool(action)
+        # Încălzire / manual heating switched on from the page counts as "heating on", even while the
+        # valve is momentarily idle: that is what guests and staff expect to see.
         if self.holds.active(room.id) or (preset and preset == self.options.guest_preset_heat):
-            return True, False
+            return True, bool(action)
+        if action:
+            return False, True
         target = attrs.get("temperature")
         if isinstance(target, (int, float)) and current is not None:
             return current < float(target) - 0.1, False

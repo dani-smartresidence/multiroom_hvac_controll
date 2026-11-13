@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.2
+- The heating look (warm glow, flame, "Încălzire" label, admin badge) is shown whenever Încălzire / manual heating
+  is on, even if the thermostat reports its valve as idle at that moment.
+
 ## 0.9.1
 - Thermostats that don't report whether they are heating (no `hvac_action`, common on TRVs): the room page no longer
   says "Temperatură atinsă". Heating (and the warm glow, also on the admin page) is shown while Încălzire/manual heating
