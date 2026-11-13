@@ -71,6 +71,12 @@ configuration:
   readable_codes:
     name: Readable QR links
     description: "Room links built from the floor and room name, e.g. /room/demisol-d01-sala-sport, instead of a random code. Anyone who knows a room's name can guess its link, so give such rooms a PIN. Off = random codes."
+  guest_preset_heat:
+    name: Room page "Încălzire" button preset
+    description: Thermostat preset set by the "Încălzire / Heating" button on the room page (starts manual heating).
+  guest_preset_eco:
+    name: Room page "Eco" button preset
+    description: Thermostat preset set by the "Eco" button on the room page (ends manual heating). Guests can never turn a thermostat off; only the admin page can.
   restore_after_events:
     name: Restore room settings after calendar events
     description: When an event's heating ends (or the event is deleted), set the thermostat back to the temperature and mode chosen on the admin page.

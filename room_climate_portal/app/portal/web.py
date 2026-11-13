@@ -255,6 +255,21 @@ def build_guest_app(portal: Portal) -> web.Application:
             return _json({"error": "ha_error", "message": err.message}, 502)
         return _json({"ok": True, "hvac_mode": applied})
 
+    @routes.post(api + "/preset")
+    async def guest_preset(request):
+        room_id = authorize(request)
+        data = await _body(request)
+        client = portal.tokens.client_id(client_ip(request, portal))
+        try:
+            snap = await portal.guest_preset(room_id, str(data.get("preset", "")), client)
+        except ValueError:
+            return _json({"error": "bad_value"}, 400)
+        except RateLimited as err:
+            return _json({"error": "rate_limited", "scope": str(err)}, 429)
+        except HAError as err:
+            return _json({"error": "ha_error", "message": err.message}, 502)
+        return _json({"ok": True, "room": snap})
+
     @routes.post(api + "/hold")
     async def hold(request):
         room_id = authorize(request)

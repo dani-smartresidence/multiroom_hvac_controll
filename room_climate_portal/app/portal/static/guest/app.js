@@ -30,16 +30,17 @@
       pin_locked: "Prea multe încercări. Reîncercați peste {m} min.", pin_short: "PIN-ul are între 4 și 8 cifre.",
       manual_heating: "Încălzire manuală", manual_short: "Manual", hold_on_title: "Încălzire pornită · {t} °C",
       plan_on_title: "Perioadă programată · {t} °C",
-      hold_on_msg: "Se oprește automat la <b>{time}</b> · {left}", hold_on_msg_day: "Se oprește automat {day} la <b>{time}</b> · {left}",
-      hold_off_title: "Pornește încălzirea", hold_off_msg: "Alegeți cât timp. Se oprește singură după {d}, dacă nu alegeți altceva.",
+      hold_on_msg: "Se încheie automat la <b>{time}</b> · {left}", hold_on_msg_day: "Se încheie automat {day} la <b>{time}</b> · {left}",
+      hold_off_title: "Pornește încălzirea", hold_off_msg: "Alegeți cât timp. Se încheie singură după {d}, dacă nu alegeți altceva.",
       hold_event_msg: "Programul camerei controlează acum încălzirea. Puteți porni și manual.",
-      stop_now: "Oprește", off_at: "Oprește la", set: "Setează", or_until: "Sau până la", start: "Pornește",
+      preset_heat: "Încălzire", preset_eco: "Eco", ok_preset_heat: "Încălzire pornită", ok_preset_eco: "Mod Eco activat",
+      stop_now: "Încheie", off_at: "Încheie la", set: "Setează", or_until: "Sau până la", start: "Pornește",
       plan_period: "Programează o perioadă", from: "De la", to: "Până la", temperature: "Temperatură",
       cancel: "Renunță", schedule_it: "Programează", planned: "{day}, {start} – {end} · {t} °C", remove: "Șterge",
       left_min: "încă {m} min", left_hm: "încă {h} h {m} min", left_h: "încă {h} h",
       dur_h: "{h}\u00a0h", dur_min: "{m}\u00a0min",
-      ok_started: "Încălzire pornită până la <b>{time}</b>", ok_until: "Se oprește la <b>{time}</b>",
-      ok_stopped: "Încălzirea a fost oprită", ok_planned: "Perioadă programată: <b>{day} {time}</b>", ok_cancelled: "Perioada a fost ștearsă",
+      ok_started: "Încălzire pornită până la <b>{time}</b>", ok_until: "Se încheie la <b>{time}</b>",
+      ok_stopped: "Încălzirea manuală s-a încheiat", ok_planned: "Perioadă programată: <b>{day} {time}</b>", ok_cancelled: "Perioada a fost ștearsă",
       hold_title_row: "Încălzire manuală", plan_title_row: "Perioadă programată", badge_on: "● Pornit",
       e_too_long: "Cel mult {h} h odată.", e_end_before_start: "Ora de sfârșit trebuie să fie după ora de început.",
       e_overlap: "Se suprapune cu o altă perioadă programată.", e_too_many: "Sunt deja prea multe perioade programate.",
@@ -73,16 +74,17 @@
       pin_locked: "Too many attempts. Try again in {m} min.", pin_short: "The PIN has 4 to 8 digits.",
       manual_heating: "Manual heating", manual_short: "Manual", hold_on_title: "Heating on · {t} °C",
       plan_on_title: "Planned period · {t} °C",
-      hold_on_msg: "Turns off automatically at <b>{time}</b> · {left}", hold_on_msg_day: "Turns off automatically {day} at <b>{time}</b> · {left}",
-      hold_off_title: "Start heating", hold_off_msg: "Choose for how long. It turns itself off after {d} unless you choose otherwise.",
+      hold_on_msg: "Ends automatically at <b>{time}</b> · {left}", hold_on_msg_day: "Ends automatically {day} at <b>{time}</b> · {left}",
+      hold_off_title: "Start heating", hold_off_msg: "Choose for how long. It ends by itself after {d} unless you choose otherwise.",
       hold_event_msg: "The room schedule is controlling the heating now. You can still start it manually.",
-      stop_now: "Turn off", off_at: "Turn off at", set: "Set", or_until: "Or until", start: "Start",
+      preset_heat: "Heating", preset_eco: "Eco", ok_preset_heat: "Heating on", ok_preset_eco: "Eco mode on",
+      stop_now: "End now", off_at: "End at", set: "Set", or_until: "Or until", start: "Start",
       plan_period: "Plan a period", from: "From", to: "Until", temperature: "Temperature",
       cancel: "Cancel", schedule_it: "Plan it", planned: "{day}, {start} – {end} · {t} °C", remove: "Remove",
       left_min: "{m} min left", left_hm: "{h} h {m} min left", left_h: "{h} h left",
       dur_h: "{h}\u00a0h", dur_min: "{m}\u00a0min",
-      ok_started: "Heating on until <b>{time}</b>", ok_until: "Turns off at <b>{time}</b>",
-      ok_stopped: "Heating turned off", ok_planned: "Period planned: <b>{day} {time}</b>", ok_cancelled: "Period removed",
+      ok_started: "Heating on until <b>{time}</b>", ok_until: "Ends at <b>{time}</b>",
+      ok_stopped: "Manual heating ended", ok_planned: "Period planned: <b>{day} {time}</b>", ok_cancelled: "Period removed",
       hold_title_row: "Manual heating", plan_title_row: "Planned period", badge_on: "● On",
       e_too_long: "At most {h} h at a time.", e_end_before_start: "The end time must be after the start time.",
       e_overlap: "It overlaps another planned period.", e_too_many: "There are already too many planned periods.",
@@ -219,7 +221,9 @@
     $("limits").textContent = t("adjustable", { min: fmtStep(c.min), max: fmtStep(c.max), step: fmtStep(c.step) });
 
     var chips = [];
-    chips.push([t("mode"), t("mode_" + c.hvac_mode) !== "mode_" + c.hvac_mode ? t("mode_" + c.hvac_mode) : (c.hvac_mode || "–")]);
+    var onPreset = (room.guest_presets || []).filter(function (p) { return p.on; })[0];
+    if (onPreset && c.hvac_mode !== "off") chips.push([t("mode"), t("preset_" + onPreset.key)]);
+    else chips.push([t("mode"), t("mode_" + c.hvac_mode) !== "mode_" + c.hvac_mode ? t("mode_" + c.hvac_mode) : (c.hvac_mode || "–")]);
     if (room.humidity != null) chips.push([t("humidity"), Math.round(room.humidity) + " %"]);
     if (room.outdoor != null) chips.push([t("outside"), fmt1(room.outdoor).replace(/[,.]0$/, "") + " °C"]);
     $("chips").innerHTML = chips.map(function (ch) {
@@ -227,9 +231,20 @@
     }).join("");
 
     var modes = $("modes");
-    if (room.allow_mode_change && c.hvac_modes.length) {
+    var gp = room.guest_presets || [];
+    var guestModes = (c.hvac_modes || []).filter(function (m) { return m !== "off"; });  // off: admin page only
+    if (gp.length) {
       modes.hidden = false;
-      modes.innerHTML = c.hvac_modes.map(function (m) {
+      modes.className = "modes presets";
+      modes.innerHTML = gp.map(function (p) {
+        var on = p.on && c.hvac_mode !== "off";
+        return '<button type="button" data-preset="' + esc(p.key) + '" class="' + p.key + (on ? " on" : "") + '"' + (usableNow() ? "" : " disabled") + ">" +
+          (p.key === "heat" ? FLAME : LEAF) + "<span>" + esc(t("preset_" + p.key)) + "</span></button>";
+      }).join("");
+    } else if (room.allow_mode_change && guestModes.length > 1) {
+      modes.hidden = false;
+      modes.className = "modes";
+      modes.innerHTML = guestModes.map(function (m) {
         return '<button type="button" data-mode="' + esc(m) + '" class="' + (m === c.hvac_mode ? "on" : "") + '">' + esc(t("mode_" + m)) + "</button>";
       }).join("");
     } else modes.hidden = true;
@@ -254,6 +269,9 @@
     return "sched";
   }
 
+  var FLAME = '<svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2c2 4 6 6 6 11a6 6 0 0 1-12 0c0-3 2-5 3-7 1 2 2 3 3 3 0-3-1-5 0-7z" fill="currentColor"/></svg>';
+  var LEAF = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 19c0-8 5-13 15-14-1 10-6 15-14 15"/><path d="M5 19l7-7"/></svg>';
+  function usableNow() { return room && room.climate.available && room.connected; }
   var CLOCK = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>';
 
   function preLine(e, now) {
@@ -642,6 +660,17 @@
   $("lang-btn-2").addEventListener("click", toggleLang);
   $("pin-form").addEventListener("submit", submitPin);
   $("modes").addEventListener("click", function (ev) {
+    var pb = ev.target.closest("button[data-preset]");
+    if (pb && !pb.disabled) {
+      var key = pb.getAttribute("data-preset");
+      pb.disabled = true;
+      return post("/preset", { preset: key }).then(function (res) {
+        if (res.ok) { onRoom(res.body.room); showToast(esc(t("ok_preset_" + key))); }
+        else if (res.status === 401) load();
+        else showToast(esc(res.status === 429 ? t("err_rate") : t("err_generic")), false, true);
+        if (room) renderControl();
+      });
+    }
     var b = ev.target.closest("button[data-mode]");
     if (!b) return;
     post("/mode", { hvac_mode: b.getAttribute("data-mode") }).then(function (res) {

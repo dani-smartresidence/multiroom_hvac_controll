@@ -291,6 +291,11 @@ class Portal:
             "hold_default_minutes": self.options.hold_default_minutes,
             "hold_max_hours": self.options.hold_max_hours,
             "default_target": min(max(self.options.default_target_temp, lo), hi),
+            "guest_presets": [
+                {"key": key, "preset": preset, "on": attrs.get("preset_mode") == preset}
+                for key, preset in self._guest_presets().items()
+                if preset in (attrs.get("preset_modes") or [])
+            ],
         }
 
     # -------------------------------------------------------------- fan-out
@@ -602,6 +607,8 @@ class Portal:
         modes = (st.get("attributes") or {}).get("hvac_modes") or []
         if mode not in modes:
             raise ValueError("unsupported mode")
+        if not admin and mode == "off":
+            raise PermissionError("only the admin page can turn a thermostat off")
         if not admin:
             self._check_rate(room_id, client)
         await self.ha.call_service("climate", "set_hvac_mode", {"hvac_mode": mode}, entity_id=room.climate)
@@ -614,6 +621,38 @@ class Portal:
             self.holds.remove(active["id"])
         self.broadcast(room_id, {"type": "room", "room": self.snapshot(room_id)})
         return mode
+
+    def _guest_presets(self) -> dict[str, str]:
+        return {"heat": self.options.guest_preset_heat, "eco": self.options.guest_preset_eco}
+
+    async def guest_preset(self, room_id: str, key: str, client: str) -> dict:
+        """Room page buttons: Încălzire (home preset) starts manual heating, Eco (away preset) ends it.
+        Guests can never turn the thermostat off; that stays on the admin page."""
+        room = self.rooms[room_id]
+        if not room.climate:
+            raise HAError("no_climate", "room has no thermostat")
+        preset = self._guest_presets().get(key)
+        st = self.states.get(room.climate) or {}
+        attrs = st.get("attributes") or {}
+        if not preset or preset not in (attrs.get("preset_modes") or []):
+            raise ValueError("unsupported preset")
+        self._check_rate(room_id, client)
+        mode = self._heat_mode(room)
+        if mode:  # thermostat is off: both buttons switch heating on
+            await self.ha.call_service("climate", "set_hvac_mode", {"hvac_mode": mode}, entity_id=room.climate)
+        await self.ha.call_service("climate", "set_preset_mode", {"preset_mode": preset}, entity_id=room.climate)
+        self.audit.write(room=room_id, action="guest_preset", old=attrs.get("preset_mode"), new=preset, client=client)
+        active = self.holds.active(room_id)
+        now = datetime.now(self.tz)
+        if key == "heat" and not active:
+            target = attrs.get("temperature")
+            target = float(target) if isinstance(target, (int, float)) else self.options.default_target_temp
+            self.holds.add(room_id, now, self._default_end(room_id, now), target, "manual", True)
+        elif key == "eco" and active:
+            self.holds.remove(active["id"])  # Eco is the guest's way of "turning off"
+        snap = self.snapshot(room_id)
+        self.broadcast(room_id, {"type": "room", "room": snap})
+        return snap
 
     async def set_preset(self, room_id: str, preset: str, client: str) -> str:
         """Admin page: thermostat preset (away, eco, comfort, ...). Remembered as part of the room settings."""

@@ -380,7 +380,7 @@ async def test_event_end_restores_admin_settings(env):
 async def test_admin_preset_and_restore(env):
     fake, portal, guest, admin = env
     rows = {r["id"]: r for r in await (await admin.get("/api/rooms")).json()}
-    assert rows["camera_101"]["preset_modes"] == ["none", "away", "eco", "comfort"]
+    assert rows["camera_101"]["preset_modes"] == ["none", "home", "away", "eco", "comfort"]
     assert rows["camera_204"]["preset_modes"] == []
     r = await admin.post("/api/rooms/camera_101/preset", json={"preset_mode": "away"})
     row = await r.json()
@@ -401,3 +401,29 @@ async def test_admin_preset_and_restore(env):
     # A temperature set on the admin page replaces the remembered preset.
     row = await (await admin.post("/api/rooms/camera_101/temperature", json={"temperature": 20})).json()
     assert row["default"]["preset_mode"] == "" and row["default"]["temperature"] == 20
+
+
+async def test_guest_presets_and_no_off(env):
+    fake, portal, guest, admin = env
+    tok = portal.tokens.token_for("camera_101")
+    data = await (await guest.get(f"/camera/api/{tok}")).json()
+    assert [p["key"] for p in data["guest_presets"]] == ["heat", "eco"]
+    assert (await (await guest.get(f"/camera/api/{portal.tokens.token_for('camera_204')}")).json())["guest_presets"] == []
+    # Thermostat off (set by the admin): Încălzire turns heating on with the home preset and starts manual heating.
+    await admin.post("/api/rooms/camera_101/mode", json={"hvac_mode": "off"})
+    r = await guest.post(f"/camera/api/{tok}/preset", json={"preset": "heat"})
+    assert r.status == 200
+    await asyncio.sleep(0.1)
+    st = fake.states["climate.camera_101_trv"]
+    assert st["state"] == "heat" and st["attributes"]["preset_mode"] == "home"
+    assert portal.holds.active("camera_101")["kind"] == "manual"
+    await asyncio.sleep(3.1)
+    r = await guest.post(f"/camera/api/{tok}/preset", json={"preset": "eco"})
+    assert r.status == 200 and portal.holds.active("camera_101") is None
+    await asyncio.sleep(0.1)
+    assert fake.states["climate.camera_101_trv"]["attributes"]["preset_mode"] == "away"
+    assert fake.states["climate.camera_101_trv"]["state"] == "heat"
+    assert (await guest.post(f"/camera/api/{tok}/preset", json={"preset": "off"})).status == 400
+    # Guests can never turn the thermostat off, even with mode changes allowed.
+    portal.rooms["camera_101"].allow_mode_change = True
+    assert (await guest.post(f"/camera/api/{tok}/mode", json={"hvac_mode": "off"})).status == 403

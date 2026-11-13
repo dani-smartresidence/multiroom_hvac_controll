@@ -73,7 +73,7 @@ class FakeHA:
             "calendar.camera_101": {"entity_id": "calendar.camera_101", "state": "off", "attributes": {}},
         }
         n = now
-        self.states["climate.camera_101_trv"]["attributes"].update(preset_modes=["none", "away", "eco", "comfort"], preset_mode="none")
+        self.states["climate.camera_101_trv"]["attributes"].update(preset_modes=["none", "home", "away", "eco", "comfort"], preset_mode="none")
         self.calendars = {
             "calendar.camera_204": [
                 {"summary": "Ședința consiliului", "start": (n + timedelta(minutes=29)).replace(second=0, microsecond=0).isoformat(),

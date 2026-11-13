@@ -41,6 +41,8 @@ class Options:
     hold_end_action: str = "off"
     setback_temp: float = 16.0
     readable_codes: bool = True
+    guest_preset_heat: str = "home"
+    guest_preset_eco: str = "away"
     restore_after_events: bool = True
 
     @classmethod

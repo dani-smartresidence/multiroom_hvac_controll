@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.7.0
+- Room page: guests can no longer turn a thermostat off. Instead of the mode buttons there are two preset buttons:
+  **Încălzire** (the thermostat's `home` preset, starts manual heating with its timer) and **Eco** (`away` preset,
+  ends manual heating). Both switch an "off" thermostat on. Presets are set with `guest_preset_heat` / `guest_preset_eco`.
+- Turning a thermostat off is only possible from the admin page (also when `allow_mode_change` is on).
+- Manual heating texts say "ends" instead of "turns off": at the end the room goes back to its admin-page settings.
+
 ## 0.6.4
 - Admin page (desktop): the title bar with the buttons, the search/filters and the table header stay at the top while scrolling.
 
