@@ -387,7 +387,8 @@ async def test_admin_preset_and_restore(env):
     assert r.status == 200 and row["preset_mode"] == "away"
     assert row["default"]["preset_mode"] == "away" and row["default"]["hvac_mode"] == "heat"
     assert (await admin.post("/api/rooms/camera_101/preset", json={"preset_mode": "party"})).status == 400
-    # Manual heating, then the timer ends: back to the away preset.
+    # Manual heating, then the timer ends: back to the away preset (room settings mode).
+    portal.options.manual_end = "room_settings"
     tok = portal.tokens.token_for("camera_101")
     await guest.post(f"/camera/api/{tok}/hold", json={"action": "start", "minutes": 60, "temperature": 23})
     await asyncio.sleep(0.1)
@@ -427,3 +428,23 @@ async def test_guest_presets_and_no_off(env):
     # Guests can never turn the thermostat off, even with mode changes allowed.
     portal.rooms["camera_101"].allow_mode_change = True
     assert (await guest.post(f"/camera/api/{tok}/mode", json={"hvac_mode": "off"})).status == 403
+
+
+async def test_manual_end_goes_to_eco(env):
+    fake, portal, guest, admin = env
+    await admin.post("/api/rooms/camera_101/preset", json={"preset_mode": "comfort"})  # room settings: comfort
+    tok = portal.tokens.token_for("camera_101")
+    await guest.post(f"/camera/api/{tok}/preset", json={"preset": "heat"})
+    _set_end(portal, "camera_101", -1)
+    await portal.process_holds()
+    await asyncio.sleep(0.1)
+    assert fake.states["climate.camera_101_trv"]["attributes"]["preset_mode"] == "away"
+    assert portal.audit.tail(1)[0]["action"] == "hold_end_eco"
+    # A room without presets still goes back to its admin settings.
+    await admin.post("/api/rooms/camera_102/temperature", json={"temperature": 19})
+    tok2 = portal.tokens.token_for("camera_102")
+    await guest.post(f"/camera/api/{tok2}/hold", json={"action": "start", "minutes": 60, "temperature": 23})
+    _set_end(portal, "camera_102", -1)
+    await portal.process_holds()
+    await asyncio.sleep(0.1)
+    assert fake.states["climate.camera_102"]["attributes"]["temperature"] == 19

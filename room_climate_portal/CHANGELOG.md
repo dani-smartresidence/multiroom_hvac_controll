@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.7.1
+- When manual heating ends (timer or **Încheie**), the thermostat switches to the **Eco** preset (`away`).
+  Rooms whose thermostat has no such preset go back to their admin-page settings, as before.
+  Option `manual_end: room_settings` keeps the old behaviour everywhere. Calendar events still end with the room settings.
+
 ## 0.7.0
 - Room page: guests can no longer turn a thermostat off. Instead of the mode buttons there are two preset buttons:
   **Încălzire** (the thermostat's `home` preset, starts manual heating with its timer) and **Eco** (`away` preset,

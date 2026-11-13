@@ -233,6 +233,7 @@
           : a.action === "heating_plan_cancelled" ? "Planned period removed"
           : a.action === "heating_off" ? "Heating turned off (" + esc(a.reason) + ")"
           : a.action === "setback" ? "Setback to " + num(a.new) + " °C (" + esc(a.reason) + ")"
+          : a.action === "hold_end_eco" ? "Manual heating ended → Eco (" + esc(a.new) + ")"
           : a.action === "restore_default" ? "Back to room settings: " + esc(MODE_LABEL[a.mode] || a.mode) + (a.preset ? " · preset " + esc(presetLabel(a.preset)) : (a.mode !== "off" && a.new != null ? " " + num(a.new) + " °C" : "")) + " (" + esc(String(a.reason).replace("_", " ")) + ")"
           : a.action === "hold_end_kept_for_event" ? "Manual heating ended, kept on for event"
           : esc(a.action) + " " + esc(a.new || "");

@@ -77,6 +77,9 @@ configuration:
   guest_preset_eco:
     name: Room page "Eco" button preset
     description: Thermostat preset set by the "Eco" button on the room page (ends manual heating). Guests can never turn a thermostat off; only the admin page can.
+  manual_end:
+    name: When manual heating ends
+    description: "eco: the thermostat switches to the Eco preset (guest_preset_eco) when the timer ends or the guest presses Încheie. room_settings: back to the settings chosen on the admin page. Rooms without that preset always go back to their admin settings."
   restore_after_events:
     name: Restore room settings after calendar events
     description: When an event's heating ends (or the event is deleted), set the thermostat back to the temperature and mode chosen on the admin page.

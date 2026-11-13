@@ -43,6 +43,7 @@ class Options:
     readable_codes: bool = True
     guest_preset_heat: str = "home"
     guest_preset_eco: str = "away"
+    manual_end: str = "eco"  # eco | room_settings
     restore_after_events: bool = True
 
     @classmethod

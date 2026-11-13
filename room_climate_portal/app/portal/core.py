@@ -421,6 +421,15 @@ class Portal:
         if self._event_running(room.id, now):
             self.audit.write(room=room.id, action="hold_end_kept_for_event", client="timer")
             return
+        eco = self.options.guest_preset_eco
+        attrs = (self.states.get(room.climate or "") or {}).get("attributes") or {}
+        if self.options.manual_end == "eco" and eco in (attrs.get("preset_modes") or []):
+            mode = self._heat_mode(room)
+            if mode:
+                await self.ha.call_service("climate", "set_hvac_mode", {"hvac_mode": mode}, entity_id=room.climate)
+            await self.ha.call_service("climate", "set_preset_mode", {"preset_mode": eco}, entity_id=room.climate)
+            self.audit.write(room=room.id, action="hold_end_eco", new=eco, reason=reason, client="timer")
+            return
         await self._restore(room, reason)
 
     async def _restore(self, room: Room, reason: str) -> None:
