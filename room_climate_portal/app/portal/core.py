@@ -415,11 +415,27 @@ class Portal:
                 return m
         return None
 
-    async def _apply_on(self, room: Room, target: float) -> float:
+    async def _apply_on(self, room: Room, target: float | None) -> float | None:
+        """Switch heating on: heat mode if off, the Încălzire preset (home) when the thermostat has it,
+        and the temperature if one was chosen (None = the preset's own temperature)."""
         st = self.states.get(room.climate or "") or {}
-        target = clamp_setpoint(room, target, st.get("attributes") or {})
-        data: dict = {"temperature": target}
+        attrs = st.get("attributes") or {}
         mode = self._heat_mode(room)
+        heat_preset = self.options.guest_preset_heat
+        has_preset = heat_preset in (attrs.get("preset_modes") or [])
+        if has_preset:
+            if mode:
+                await self.ha.call_service("climate", "set_hvac_mode", {"hvac_mode": mode}, entity_id=room.climate)
+                mode = None
+            if attrs.get("preset_mode") != heat_preset:
+                await self.ha.call_service("climate", "set_preset_mode", {"preset_mode": heat_preset}, entity_id=room.climate)
+            if target is None:
+                return None
+        if target is None:
+            cur = attrs.get("temperature")
+            target = float(cur) if isinstance(cur, (int, float)) and st.get("state") != "off" else self.options.default_target_temp
+        target = clamp_setpoint(room, target, attrs)
+        data: dict = {"temperature": target}
         if mode:
             data["hvac_mode"] = mode
         await self.ha.call_service("climate", "set_temperature", data, entity_id=room.climate)
@@ -509,7 +525,9 @@ class Portal:
         if action == "start":
             self._check_rate(room_id, client)
             end = end_from(now)
-            target = await self._apply_on(room, target_from(data.get("temperature")))
+            chosen = data.get("temperature")
+            applied = await self._apply_on(room, float(chosen) if chosen is not None else None)
+            target = applied if applied is not None else target_from(None)
             if active:
                 self.holds.remove(active["id"])
             hold = self.holds.add(room_id, now, end, target, "manual", True)

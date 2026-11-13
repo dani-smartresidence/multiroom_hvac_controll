@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.3
+- Starting manual heating from the room page (1 h / 2 h / 4 h or "Sau până la … Pornește") now also switches the
+  thermostat to the Încălzire preset (`home`), and to Heat if it was off, not only the timer. Planned periods do the same
+  and then set their own temperature.
+
 ## 0.9.2
 - The heating look (warm glow, flame, "Încălzire" label, admin badge) is shown whenever Încălzire / manual heating
   is on, even if the thermostat reports its valve as idle at that moment.
