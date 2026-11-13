@@ -167,3 +167,21 @@ a{color:inherit;text-decoration:none}
 .modes.presets button.heat.on{background:var(--heat);border-color:var(--heat);color:#fff}
 .modes.presets button.eco.on{background:var(--ok);border-color:var(--ok);color:#fff}
 .modes.presets button:disabled{opacity:.45}
+
+/* ---------- visual "heating on" effect ---------- */
+.dial-card{position:relative;transition:box-shadow .6s,border-color .6s,background .6s}
+.dial-card.is-heating{border-color:color-mix(in srgb,var(--heat) 45%,var(--line));
+  background:radial-gradient(120% 70% at 50% 0%,color-mix(in srgb,var(--heat) 14%,var(--card)) 0%,var(--card) 70%);
+  box-shadow:0 12px 40px -14px color-mix(in srgb,var(--heat) 60%,transparent)}
+.dial-card.is-heating .dial-arc{animation:arcGlow 2.4s ease-in-out infinite}
+.dial-card.is-heating .state svg{animation:flicker 1.3s ease-in-out infinite;transform-origin:50% 90%}
+.waves{position:absolute;left:50%;top:22px;transform:translateX(-50%);display:flex;gap:9px;opacity:0;transition:opacity .6s;pointer-events:none}
+.waves i{display:block;width:4px;height:22px;border-radius:4px;background:linear-gradient(to top,transparent,var(--heat));opacity:.0}
+.dial-card.is-heating .waves{opacity:1}
+.dial-card.is-heating .waves i{animation:rise 2.2s ease-in infinite}
+.dial-card.is-heating .waves i:nth-child(2){animation-delay:.7s}
+.dial-card.is-heating .waves i:nth-child(3){animation-delay:1.4s}
+@keyframes arcGlow{0%,100%{filter:drop-shadow(0 0 0 transparent)}50%{filter:drop-shadow(0 0 7px var(--heat))}}
+@keyframes flicker{0%,100%{transform:scale(1) rotate(0)}30%{transform:scale(1.12,1.2) rotate(-4deg)}60%{transform:scale(.95,1.05) rotate(3deg)}}
+@keyframes rise{0%{transform:translateY(10px) scaleY(.6);opacity:0}30%{opacity:.8}100%{transform:translateY(-14px) scaleY(1.1);opacity:0}}
+@media (prefers-reduced-motion:reduce){.dial-card.is-heating .dial-arc,.dial-card.is-heating .state svg,.dial-card.is-heating .waves i{animation:none}.dial-card.is-heating .waves i{opacity:.6}}

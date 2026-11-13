@@ -156,3 +156,19 @@ select.mode{margin-top:6px;font:inherit;font-size:12px;padding:5px 8px;border-ra
   #rooms tr.open td.c-temp{padding-bottom:12px}
   .c-now .mlbl,.c-temp .mlbl{display:block}
 }
+
+/* ---------- visual "heating on" effect ---------- */
+.heat-badge{display:inline-flex;align-items:center;gap:4px;font-weight:700;color:#fff;background:var(--accent);padding:1px 8px 1px 6px;border-radius:999px;font-size:12px}
+.heat-badge svg,.flame svg{animation:flicker 1.3s ease-in-out infinite;transform-origin:50% 90%}
+.flame{color:var(--accent);display:inline-flex;vertical-align:-1px}
+#rooms tr.heating td{background:color-mix(in srgb,var(--accent) 6%,var(--card))}
+#rooms tr.heating td:first-child{box-shadow:inset 4px 0 0 var(--accent)}
+#rooms tr.heating td.c-temp{background:color-mix(in srgb,var(--accent) 9%,var(--card))}
+@keyframes flicker{0%,100%{transform:scale(1) rotate(0)}30%{transform:scale(1.12,1.2) rotate(-4deg)}60%{transform:scale(.95,1.05) rotate(3deg)}}
+@keyframes heatGlow{0%,100%{box-shadow:0 0 0 1px var(--accent),0 6px 18px -10px var(--accent)}50%{box-shadow:0 0 0 1px var(--accent),0 8px 26px -6px var(--accent)}}
+@media (max-width:900px){
+  #rooms tr.heating{border-color:var(--accent);animation:heatGlow 2.6s ease-in-out infinite;background:linear-gradient(180deg,color-mix(in srgb,var(--accent) 10%,var(--card)),var(--card) 55%)}
+  #rooms tr.heating td,#rooms tr.heating td.c-temp{background:transparent}
+  #rooms tr.heating td:first-child{box-shadow:none}
+}
+@media (prefers-reduced-motion:reduce){.heat-badge svg,.flame svg,#rooms tr.heating{animation:none}}

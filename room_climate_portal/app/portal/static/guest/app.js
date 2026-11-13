@@ -213,7 +213,9 @@
     else if (c.hvac_action === "drying") label = t("drying");
     else if (c.hvac_action === "fan") label = t("fan");
     else label = t("idle");
-    action.innerHTML = (action.classList.contains("heating") ? '<svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2c2 4 6 6 6 11a6 6 0 0 1-12 0c0-3 2-5 3-7 1 2 2 3 3 3 0-3-1-5 0-7z" fill="currentColor"/></svg>' : "") + esc(label);
+    var heatingNow = action.classList.contains("heating");
+    $("dial-card").classList.toggle("is-heating", heatingNow);
+    action.innerHTML = (heatingNow ? '<svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2c2 4 6 6 6 11a6 6 0 0 1-12 0c0-3 2-5 3-7 1 2 2 3 3 3 0-3-1-5 0-7z" fill="currentColor"/></svg>' : "") + esc(label);
 
     var canChange = c.available && room.connected;
     $("minus").disabled = !canChange || shown <= c.min;

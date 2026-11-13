@@ -73,6 +73,8 @@
   // ------------------------------------------------------------ thermostat control
   var PENDING = {}, TIMERS = {}, OPEN = {};
   var MODE_LABEL = { off: "Off", heat: "Heat", cool: "Cool", auto: "Auto", heat_cool: "Heat / cool", dry: "Dry", fan_only: "Fan" };
+  var FLAME = '<svg width="13" height="13" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2c2 4 6 6 6 11a6 6 0 0 1-12 0c0-3 2-5 3-7 1 2 2 3 3 3 0-3-1-5 0-7z" fill="currentColor"/></svg>';
+  function isHeating(r) { return r.available && r.hvac_mode !== "off" && (r.hvac_action === "heating" || r.hvac_action === "preheating"); }
   function rangeText(r) {
     var t = "Range " + num(r.set_min) + "–" + num(r.set_max) + " °C";
     var lim = [];
@@ -90,7 +92,9 @@
     html += '<div class="live-state' + (r.hvac_mode === "off" ? " off" : "") + '"><b>' + esc(mode) + "</b>" +
       (preset ? ' <span class="pill">' + esc(preset) + "</span>" : "") +
       (r.hvac_mode !== "off" && r.target != null ? " · target <b>" + num(r.target) + " °C</b>" : "") + "</div>";
-    html += '<div class="live-cur">Room <b>' + num(r.current) + " °C</b>" + (r.hvac_action ? ' · <span class="act ' + esc(r.hvac_action) + '">' + esc(r.hvac_action) + "</span>" : "") + "</div>";
+    var heating = isHeating(r);
+    html += '<div class="live-cur">Room <b>' + num(r.current) + " °C</b>" +
+      (heating ? ' · <span class="heat-badge">' + FLAME + "Heating</span>" : (r.hvac_action ? ' · <span class="act">' + esc(r.hvac_action) + "</span>" : "")) + "</div>";
     if (r.hold) html += '<div class="hold">' + (r.hold.kind === "planned" ? "Planned period" : "Guest manual heating") + " until " + hm(r.hold.end) + "</div>";
     if (r.planned) html += '<div class="muted">' + r.planned + " planned</div>";
     html += '<div class="muted small">' + esc(rangeText(r)) + "</div>";
@@ -206,8 +210,9 @@
     var issues = (r.issues || []).map(function (i) { return '<span class="issue">' + esc(i) + "</span>"; }).join(" ");
     var ev = r.next_event;
     var open = OPEN[r.id];
-    return "<tr data-id=\"" + esc(r.id) + "\"" + (open ? ' class="open"' : "") + ">" +
-      "<td class=\"c-room\"><div class=\"rhead\"><div><b class=\"rname\">" + esc(r.name) + "</b><div class=\"muted\">" + esc(r.subtitle) +
+    var cls = (open ? "open " : "") + (isHeating(r) ? "heating" : "");
+    return "<tr data-id=\"" + esc(r.id) + "\"" + (cls.trim() ? ' class="' + cls.trim() + '"' : "") + ">" +
+      "<td class=\"c-room\"><div class=\"rhead\"><div><b class=\"rname\">" + esc(r.name) + (isHeating(r) ? ' <span class="flame" title="Heating">' + FLAME + "</span>" : "") + "</b><div class=\"muted\">" + esc(r.subtitle) +
         '<span class="m-only"> · ' + (r.pin_enabled ? "PIN on" : "no PIN") + "</span></div><div class=\"mono muted d-only\">" + esc(r.id) + "</div></div>" +
         '<button type="button" class="more m-only" data-more="' + esc(r.id) + '" aria-expanded="' + (open ? "true" : "false") + '">' + (open ? "Less ▴" : "Details ▾") + "</button></div>" +
         (issues ? "<div>" + issues + "</div>" : "") + "</td>" +

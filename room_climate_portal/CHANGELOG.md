@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.8.1
+- Visual "heating on" effect. Room page: the thermostat card glows warm, the dial arc pulses and the flame flickers
+  while the thermostat is heating. Admin page: heating rooms get an orange stripe and tint, a flickering flame next to
+  the name and an orange "Heating" badge; on phones the room card glows. Animations stop if the phone asks for reduced motion.
+
 ## 0.8.0
 - Admin page: two clear columns. **Thermostat now** (read-only live state: mode, preset, target, room temperature,
   heating/idle, guest manual heating, effective range and whether the thermostat itself limits it) and
