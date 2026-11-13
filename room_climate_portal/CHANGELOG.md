@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.4
+- The heating glow, flame and "Încălzire" label (room page and admin) now appear only while the thermostat
+  reports `hvac_action: heating`. Heat mode, the Încălzire preset or a running timer alone no longer show it.
+
 ## 0.9.3
 - Starting manual heating from the room page (1 h / 2 h / 4 h or "Sau până la … Pornește") now also switches the
   thermostat to the Încălzire preset (`home`), and to Heat if it was off, not only the timer. Planned periods do the same

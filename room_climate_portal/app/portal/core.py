@@ -662,28 +662,10 @@ class Portal:
         return mode
 
     def _heating_on(self, room: Room, cl: dict, current: float | None) -> tuple[bool, bool]:
-        """Is the room being heated? Uses hvac_action when the thermostat reports it; many TRVs don't,
-        so then it is inferred from the mode, the presets, manual heating and the temperatures."""
+        """Is the room being heated right now? Only a reported hvac_action of "heating" counts."""
         attrs = cl.get("attributes") or {}
         action = attrs.get("hvac_action")
-        if action in ("heating", "preheating"):
-            return True, True
-        mode = cl.get("state")
-        if mode in (None, "off", "unavailable", "unknown", "cool", "dry", "fan_only"):
-            return False, bool(action)
-        preset = attrs.get("preset_mode")
-        if preset and preset == self.options.guest_preset_eco:
-            return False, bool(action)
-        # Încălzire / manual heating switched on from the page counts as "heating on", even while the
-        # valve is momentarily idle: that is what guests and staff expect to see.
-        if self.holds.active(room.id) or (preset and preset == self.options.guest_preset_heat):
-            return True, bool(action)
-        if action:
-            return False, True
-        target = attrs.get("temperature")
-        if isinstance(target, (int, float)) and current is not None:
-            return current < float(target) - 0.1, False
-        return False, False
+        return action == "heating", bool(action)
 
     def view_only(self, room_id: str) -> bool:
         return bool((self.access.get(room_id) or {}).get("view_only"))
