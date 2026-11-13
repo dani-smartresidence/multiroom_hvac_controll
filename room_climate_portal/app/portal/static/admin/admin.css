@@ -125,3 +125,15 @@ select.mode{margin-top:6px;font:inherit;font-size:12px;padding:5px 8px;border-ra
   .dlg-btns button{flex:1;padding:12px}
   .flash{bottom:calc(16px + env(safe-area-inset-bottom))}
 }
+
+/* ---------- desktop: header, search and table head stay visible while scrolling ---------- */
+@media (min-width:901px){
+  .top{position:sticky;top:0;z-index:6;background:var(--bg);padding-bottom:12px}
+  .filters{position:sticky;top:var(--top-h,0px);z-index:5;background:var(--bg);margin:0;padding:4px 0 12px}
+  #rooms{overflow:visible;border-collapse:separate;border-spacing:0}
+  #rooms thead th{position:sticky;top:calc(var(--top-h,0px) + var(--filters-h,0px));z-index:4;background:var(--card);border-bottom:1px solid var(--line);box-shadow:0 1px 0 var(--line)}
+  #rooms thead th:first-child{border-top-left-radius:12px}
+  #rooms thead th:last-child{border-top-right-radius:12px}
+  #rooms tbody tr:last-child td:first-child{border-bottom-left-radius:12px}
+  #rooms tbody tr:last-child td:last-child{border-bottom-right-radius:12px}
+}

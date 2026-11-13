@@ -367,6 +367,19 @@
     fetch("api/reload", { method: "POST" }).then(function () { btn.disabled = false; load(); });
   });
   load();
+  // Heights of the sticky header and search bar, so the table head sticks right below them.
+  function measureSticky() {
+    var root = document.documentElement.style;
+    root.setProperty("--top-h", document.querySelector(".top").offsetHeight + "px");
+    root.setProperty("--filters-h", ($("#filters").hidden ? 0 : $("#filters").offsetHeight) + "px");
+  }
+  window.addEventListener("resize", measureSticky);
+  if (window.ResizeObserver) {
+    var ro = new ResizeObserver(measureSticky);
+    ro.observe(document.querySelector(".top"));
+    ro.observe($("#filters"));
+  }
+  measureSticky();
   setInterval(function () {
     var a = document.activeElement;
     if (a && a.matches && a.matches("select.mode")) return;  // also preset menus  // don't close an open mode menu

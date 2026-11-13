@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.6.4
+- Admin page (desktop): the title bar with the buttons, the search/filters and the table header stay at the top while scrolling.
+
 ## 0.6.3
 - Admin page: a **Preset** menu next to the mode for thermostats that expose presets (away, eco, comfort, …).
 - The chosen preset is part of the room settings: after events and timers the thermostat goes back to that mode
