@@ -43,7 +43,36 @@
   </table>
   <p class="empty" id="empty" hidden>No rooms found. Put the label <code id="label"></code> on each room's Area in Home Assistant (Settings → Areas), or list rooms in <code>/addon_configs/…room_climate_portal/rooms.yaml</code>, then press “Re-scan rooms”.</p>
 
-  <h2>Recent changes</h2>
+  <h2>Recent changes <button id="audit-toggle" class="small">Hide</button></h2>
+<div class="filters" id="log-filter">
+  <input type="search" id="logq" placeholder="Search logs…" autocomplete="off" aria-label="Search logs">
+  <div class="filter-select">
+    <label for="log-action-filter">Action:</label>
+    <select id="log-action-filter">
+      <option value="all" selected>All</option>
+      <option value="view_only">View only</option>
+      <option value="changes_allowed">Changes allowed</option>
+      <option value="set_preset">Preset</option>
+      <option value="code_readable">Readable QR</option>
+      <option value="code_custom">Custom QR</option>
+      <option value="set_hvac_mode">HVAC mode</option>
+      <option value="set_temperature">Temperature</option>
+      <option value="rotate_token">Rotate token</option>
+      <option value="heating_on">Heating on</option>
+      <option value="heating_until">Heating until</option>
+      <option value="heating_planned">Heating planned</option>
+      <option value="heating_plan_cancelled">Heating cancel</option>
+      <option value="heating_off">Heating off</option>
+      <option value="setback">Setback</option>
+      <option value="hold_end_eco">Hold end eco</option>
+      <option value="restore_default">Restore default</option>
+      <option value="hold_end_kept_for_event">Hold end kept event</option>
+    </select>
+  </div>
+  <div class="chips" id="log-chips" role="group" aria-label="Filter logs">
+    <button type="button" data-f="all" class="on">All</button>
+  </div>
+</div>
   <table id="audit">
     <thead><tr><th>Time</th><th>Room</th><th>Change</th><th>Phone</th></tr></thead>
     <tbody></tbody>
