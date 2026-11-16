@@ -14,6 +14,9 @@
 
   // ------------------------------------------------------------ search / filter
   var ROOMS = [], FILTER = "all";
+var LOGS = [];
+var LOG_ACTION_FILTER = "all";
+var LOG_Q = "";
   try { FILTER = sessionStorage.getItem("rcp-admin-filter") || "all"; $("#q").value = sessionStorage.getItem("rcp-admin-q") || ""; } catch (e) { /* ignore */ }
   function fold(s) { return String(s == null ? "" : s).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase(); }
   function haystack(r) {
@@ -252,6 +255,52 @@
       loadRest();
     }).catch(loadRest);
   }
+
+  // Log filtering and toggle
+  var LOG_Q = "";
+  function renderAudit() {
+    var words = fold(LOG_Q).split(/\s+/).filter(Boolean);
+    var shown = LOGS.filter(function (a) {
+      var h = fold([a.room, a.action, a.client].join(" "));
+      return words.every(function (w) { return h.indexOf(w) !== -1; });
+    });
+    $("#audit tbody").innerHTML = shown.map(function (a) {
+      var change = a.action === "view_only" ? "Room page set to view only"
+        : a.action === "changes_allowed" ? "Room page changes allowed"
+        : a.action === "set_preset" ? "Preset " + esc(a.old || "none") + " → " + esc(a.new)
+        : a.action === "code_readable" ? "Readable QR code"
+        : a.action === "code_custom" ? "Custom QR code"
+        : a.action === "set_hvac_mode" ? "Mode " + esc(a.old) + " → " + esc(a.new)
+        : a.action === "set_temperature" ? num(a.old) + " → " + num(a.new) + " °C"
+        : a.action === "rotate_token" ? "QR code replaced"
+        : a.action === "heating_on" ? "Manual heating on, " + num(a.new) + " °C until " + hm(a.until)
+        : a.action === "heating_until" ? "Manual heating now ends " + hm(a.until)
+        : a.action === "heating_planned" ? "Planned " + hm(a.start) + "–" + hm(a.until) + ", " + num(a.new) + " °C"
+        : a.action === "heating_plan_cancelled" ? "Planned period removed"
+        : a.action === "heating_off" ? "Heating turned off (" + esc(a.reason) + ")"
+        : a.action === "setback" ? "Setback to " + num(a.new) + " °C (" + esc(a.reason) + ")"
+        : a.action === "hold_end_eco" ? "Manual heating ended → Eco (" + esc(a.new) + ")"
+        : a.action === "restore_default" ? "Back to room settings: " + esc(MODE_LABEL[a.mode] || a.mode) + (a.preset ? " · preset " + esc(presetLabel(a.preset)) : (a.mode !== "off" && a.new != null ? " " + num(a.new) + " °C" : "")) + " (" + esc(String(a.reason).replace("_", " ")) + ")"
+        : a.action === "hold_end_kept_for_event" ? "Manual heating ended, kept on for event"
+        : esc(a.action) + " " + esc(a.new || "");
+      return "<tr data-room=\"" + esc(a.room) + "\"><td class=\"a-time\">" + new Date(a.ts * 1000).toLocaleString([], { timeZone: TZ, dateStyle: "short", timeStyle: "short" }) + "</td><td class=\"a-room\">" + esc(a.room) + "</td><td class=\"a-change\">" + change + "</td><td class=\"mono a-client\">" + esc(a.client) + "</td></tr>";
+    }).join("") || '<tr><td colspan="4" class="muted">No changes yet.</td></tr>';
+    renderRooms();
+  }
+
+  $("#audit-toggle").addEventListener("click", function () {
+    var audit = $("#audit");
+    var filter = $("#log-filter");
+    var wasHidden = audit.hidden;
+    audit.hidden = !wasHidden;
+    filter.hidden = !wasHidden;
+    this.textContent = wasHidden ? "Hide" : "Show";
+  });
+
+  $("#logq").addEventListener("input", function () {
+    LOG_Q = this.value;
+    renderAudit();
+  });
 
   function loadRest() {
     fetch("api/rooms").then(function (r) { return r.json(); }).then(function (rooms) {
