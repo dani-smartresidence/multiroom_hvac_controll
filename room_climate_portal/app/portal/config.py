@@ -90,6 +90,10 @@ class Paths:
         return self.data / "room_access.json"
 
     @property
+    def room_settings(self) -> Path:
+        return self.data / "room_settings.json"
+
+    @property
     def pins(self) -> Path:
         return self.data / "pins.json"
 

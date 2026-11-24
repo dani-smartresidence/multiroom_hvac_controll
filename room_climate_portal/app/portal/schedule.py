@@ -1,8 +1,8 @@
 """Turn calendar events into the room schedule shown on the page.
 
-Precondition start = event start - lead time. The lead time comes from the room's
-lead-time entity (minutes); an event can override it with a line like
-``precondition: 60`` in its description, and set its target with ``target: 22``.
+Precondition start = event start - lead time. The lead time is the room's own setting
+(admin page; else its lead-time entity, else the add-on default). Calendar events do not
+carry a lead time; an event can only set its target with a line like ``target: 22``.
 """
 from __future__ import annotations
 
@@ -11,17 +11,11 @@ from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 TARGET_RE = re.compile(r"(?:target|tinta|țintă|ținta|temp(?:eratura)?)\s*[:=]\s*(\d{1,2}(?:[.,]\d+)?)", re.I)
-LEAD_RE = re.compile(r"(?:precondition(?:ing)?|precondi[tț]ionare|lead)\s*[:=]\s*(\d{1,3})", re.I)
 
 
 def parse_target(text: str | None) -> float | None:
     m = TARGET_RE.search(text or "")
     return float(m.group(1).replace(",", ".")) if m else None
-
-
-def parse_lead(text: str | None) -> int | None:
-    m = LEAD_RE.search(text or "")
-    return int(m.group(1)) if m else None
 
 
 def lead_minutes_from_state(state: dict | None, default: int) -> int:
@@ -68,8 +62,7 @@ def build_events(
         if end <= now:
             continue
         description = ev.get("description") or ""
-        lead = parse_lead(description)
-        lead = lead_minutes if lead is None else lead
+        lead = lead_minutes
         target = parse_target(description)
         out.append(
             {

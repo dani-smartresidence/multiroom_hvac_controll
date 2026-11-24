@@ -58,7 +58,7 @@ async def test_room_snapshot(env):
     assert data["lead_minutes"] == 45
     first = data["events"][0]
     assert first["summary"] == "Ședința consiliului" and first["lead_minutes"] == 45
-    assert data["events"][1]["lead_minutes"] == 30
+    assert data["events"][1]["lead_minutes"] == 45  # "precondition: 30" in the event is ignored
     assert r.headers["Content-Security-Policy"].startswith("default-src 'self'")
     assert r.headers["Referrer-Policy"] == "no-referrer"
 
@@ -504,3 +504,40 @@ async def test_start_uses_heat_preset(env):
     st = fake.states["climate.camera_101_trv"]
     assert st["state"] == "heat" and st["attributes"]["preset_mode"] == "home"
     assert portal.holds.active("camera_101") is not None
+
+
+async def test_admin_sets_lead_time_per_room(env):
+    fake, portal, guest, admin = env
+    rows = {r["id"]: r for r in await (await admin.get("/api/rooms")).json()}
+    assert rows["camera_204"]["lead_minutes"] == 45 and rows["camera_204"]["lead_source"] == "entity"
+
+    r = await admin.post("/api/rooms/camera_204/lead_time", json={"lead_minutes": 90})
+    assert r.status == 200
+    row = await r.json()
+    assert row["lead_minutes"] == 90 and row["lead_source"] == "room"
+    ev = portal.schedules["camera_204"][0]
+    assert ev["lead_minutes"] == 90
+    assert fake.published["sensor.camera_204_next_precondition"]["attributes"]["lead_minutes"] == 90
+    assert portal.audit.tail(1)[0]["action"] == "lead_time"
+
+    # The admin value wins over the HA helper, also when the helper changes.
+    await fake.set_state("input_number.camera_204_precondition_minutes", "20.0", {"unit_of_measurement": "min"})
+    await asyncio.sleep(0.2)
+    assert portal.lead_minutes(portal.rooms["camera_204"]) == 90
+
+    # The guest page shows the new lead time.
+    tok = portal.tokens.token_for("camera_204")
+    data = await (await guest.get(f"/camera/api/{tok}")).json()
+    assert data["lead_minutes"] == 90 and all(e["lead_minutes"] in (90, None) for e in data["events"])
+
+    for bad in (-5, 601, 12.5, "abc", True):
+        assert (await admin.post("/api/rooms/camera_204/lead_time", json={"lead_minutes": bad})).status == 400
+
+    # Reset: back to the helper's value.
+    row = await (await admin.post("/api/rooms/camera_204/lead_time", json={"lead_minutes": None})).json()
+    assert row["lead_source"] == "entity" and row["lead_minutes"] == 20
+
+    # Saved across restarts.
+    await admin.post("/api/rooms/camera_102/lead_time", json={"lead_minutes": 0})
+    from portal.holds import DefaultsStore
+    assert DefaultsStore(portal.paths.room_settings).get("camera_102") == {"lead_minutes": 0}

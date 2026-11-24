@@ -157,8 +157,6 @@ def discover(
             room.issues.append(f"climate_not_found: {room.climate}")
         if not room.calendar:
             room.issues.append("missing_calendar")
-        if not room.lead_time:
-            room.issues.append(f"missing_lead_time (using {options.default_lead_minutes} min)")
         if room.min_temp >= room.max_temp:
             room.issues.append("invalid_limits")
             room.min_temp, room.max_temp = options.min_temp, options.max_temp

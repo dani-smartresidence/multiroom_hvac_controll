@@ -31,7 +31,7 @@ configuration:
     description: Target temperature shown for an event when its description has no "target:" line.
   default_lead_minutes:
     name: Default lead time
-    description: Minutes used when a room has no lead-time entity.
+    description: Minutes used when a room has no lead time set on the admin page and no lead-time entity.
   schedule_days:
     name: Days of schedule
     description: How many days ahead the room page lists events.

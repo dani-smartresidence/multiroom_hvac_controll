@@ -20,6 +20,7 @@ from .tokens import TokenStore
 _LOGGER = logging.getLogger(__name__)
 
 SCHEDULE_REFRESH_S = 300
+MAX_LEAD_MINUTES = 600
 REGISTRY_EVENTS = (
     "area_registry_updated",
     "entity_registry_updated",
@@ -71,6 +72,7 @@ class Portal:
         self.holds = HoldStore(paths.holds)
         self.defaults = DefaultsStore(paths.defaults)
         self.access = DefaultsStore(paths.access)  # {room: {"view_only": bool}}
+        self.room_settings = DefaultsStore(paths.room_settings)  # {room: {"lead_minutes": int}}
         self._running_events: dict[tuple, dict] = {}  # (room, start, summary) -> event, while it heats
         ha.on_connect = self._on_connect
         ha.on_disconnect = self._on_disconnect
@@ -178,9 +180,35 @@ class Portal:
     async def refresh_all_schedules(self) -> None:
         await asyncio.gather(*(self.refresh_schedule(r) for r in list(self.rooms)), return_exceptions=True)
 
+    def lead_source(self, room: Room) -> str:
+        """Where the room's lead time comes from: "room" (admin page), "entity" (HA helper) or "default"."""
+        if isinstance((self.room_settings.get(room.id) or {}).get("lead_minutes"), int):
+            return "room"
+        return "entity" if room.lead_time else "default"
+
     def lead_minutes(self, room: Room) -> int:
+        """Pre-heat/pre-cool lead before each event. Calendar events never carry one: the room's
+        admin-page setting wins, then the room's lead-time entity, then the add-on default."""
+        saved = (self.room_settings.get(room.id) or {}).get("lead_minutes")
+        if isinstance(saved, int):
+            return saved
         st = self.states.get(room.lead_time) if room.lead_time else None
         return lead_minutes_from_state(st, self.options.default_lead_minutes)
+
+    async def set_lead_minutes(self, room_id: str, minutes: int | None, client: str = "admin") -> int:
+        """Admin page: the room's lead time in minutes, or None to go back to the entity / default."""
+        room = self.rooms[room_id]
+        old = self.lead_minutes(room)
+        if minutes is None:
+            self.room_settings.clear(room_id, "lead_minutes")
+        else:
+            if not isinstance(minutes, int) or isinstance(minutes, bool) or not 0 <= minutes <= MAX_LEAD_MINUTES:
+                raise ValueError("bad lead time")
+            self.room_settings.update(room_id, lead_minutes=minutes)
+        new = self.lead_minutes(room)
+        self.audit.write(room=room_id, action="lead_time", old=old, new=new, source=self.lead_source(room), client=client)
+        await self.refresh_schedule(room_id)
+        return new
 
     async def refresh_schedule(self, room_id: str) -> None:
         room = self.rooms.get(room_id)

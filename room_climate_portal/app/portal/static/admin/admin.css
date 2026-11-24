@@ -181,3 +181,7 @@ select.mode{margin-top:6px;font:inherit;font-size:12px;padding:5px 8px;border-ra
 .switch input:checked+span{background:var(--ink)}
 .switch input:checked+span::after{transform:translateX(14px)}
 .vo-tag{display:inline-block;font-size:11px;font-weight:700;padding:1px 7px;border-radius:999px;background:var(--line);color:var(--ink);white-space:nowrap}
+.lead{margin-top:6px;font-size:12px;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.lead-in{width:64px;font:inherit;font-variant-numeric:tabular-nums;padding:4px 6px;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--ink)}
+.lead-in:focus{outline:none;border-color:var(--accent)}
+@media (max-width:900px){.lead{font-size:14px}.lead-in{font-size:16px;width:80px;padding:8px}}

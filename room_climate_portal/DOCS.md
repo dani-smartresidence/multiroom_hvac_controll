@@ -12,15 +12,17 @@ before each one. Everything comes from Home Assistant; the add-on never keeps it
 | Area | One Area per room (Settings → Areas). Put the label **`qr_room`** on it. |
 | Thermostat | The room's `climate` entity assigned to that Area (directly or through its device). |
 | Calendar | One calendar per room in the Area, e.g. a Local Calendar `calendar.camera_204`. |
-| Lead time | A `sensor` / `input_number` (minutes) in the Area, labelled **`precondition_lead`** or with `precondition` in its entity id, e.g. `input_number.camera_204_precondition_minutes`. Missing → the default from the options (45 min). |
+| Lead time | Set per room on the admin page (**Calendar & lead time** column: "Start … min before events"). Rooms without one there use a `sensor` / `input_number` (minutes) in the Area, labelled **`precondition_lead`** or with `precondition` in its entity id, if any, else the default from the options (45 min). |
 | Humidity (optional) | Any humidity sensor in the Area is shown automatically. |
 
-Event descriptions may carry two optional lines:
+An event description may carry one optional line:
 
 ```
 target: 22          # target temperature for this event (else the "Default event target" option)
-precondition: 60    # lead time for this event only, in minutes
 ```
+
+The calendar does not set the lead time: a `precondition: 60` line in an event is ignored. Change the
+room's lead time on the admin page instead.
 
 ## 2. Configure the add-on
 
