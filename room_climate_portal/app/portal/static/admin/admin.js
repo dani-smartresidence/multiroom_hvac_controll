@@ -235,9 +235,8 @@ var LOG_Q = "";
 
   // Pre-heat lead before each calendar event, set per room here (events don't carry one).
   function leadCell(r) {
-    var src = r.lead_source === "room" ? "set here"
-      : r.lead_source === "entity" ? "from " + r.lead_time
-      : "add-on default";
+    var src = r.lead_source === "room" ? "this room only"
+      : "all rooms";
     return '<div class="lead"><label>Start <input type="number" class="lead-in" min="0" max="600" step="5" inputmode="numeric" data-lead="' +
       esc(r.id) + '" value="' + esc(r.lead_minutes) + '" aria-label="Lead time in minutes"> min before events</label>' +
       (r.lead_source === "room" ? ' <button type="button" class="small" data-lead-reset="' + esc(r.id) + '">Reset</button>' : "") +
@@ -259,6 +258,9 @@ var LOG_Q = "";
       "<td class=\"c-x\"><div class=\"mlbl\">Calendar &amp; lead time</div><div class=\"mono\">" + esc(r.calendar || "–") + "</div>" + leadCell(r) + "</td>" +
       "<td class=\"c-x\"><div class=\"mlbl\">Next event</div>" + (ev ? esc(ev.summary) + "<div class=\"muted\">" + time(ev.start) + "</div><div class=\"muted\">precondition " + time(ev.precondition_start) + "</div>" : "<span class=\"muted\">none</span>") + "</td>" +
       "<td class=\"c-x c-qr\"><div class=\"mlbl\">QR code</div><a href=\"print?auto=1&room=" + encodeURIComponent(r.id) + "\" target=\"_blank\" rel=\"noopener\"><img class=\"qr\" alt=\"QR\" src=\"qr/" + encodeURIComponent(r.id) + ".svg?g=" + r.generation + "&c=" + encodeURIComponent(r.url.split("/").pop()) + "\"></a>" +
+      '<div class="caption">Print text: <b>' + (esc(r.print_caption) || '<span class="muted">(none)</span>') + "</b>" +
+        (r.own_caption ? ' <span class="muted">(this room)</span>' : "") +
+        ' <button type="button" class="small" data-caption="' + esc(r.id) + '">Edit</button></div>' +
       "<div class=\"url\">" + esc(r.url) + " <b>(" + esc(r.code_kind || "random") + ")</b></div>" +
         (r.code_kind !== "random" && !r.pin_enabled ? '<div class="issue">Easy-to-guess link: set a PIN</div>' : "") + "<div class=\"muted\">" + r.open_pages + " open now</div></td>" +
       "<td class=\"c-x\"><div class=\"mlbl\">PIN &amp; code</div><div>" + (r.pin_enabled ? "<b>On</b>" : "<span class=\"muted\">Off</span>") + "</div>" +
@@ -307,7 +309,8 @@ var LOG_Q = "";
         : a.action === "hold_end_eco" ? "Manual heating ended → Eco (" + esc(a.new) + ")"
         : a.action === "restore_default" ? "Back to room settings: " + esc(MODE_LABEL[a.mode] || a.mode) + (a.preset ? " · preset " + esc(presetLabel(a.preset)) : (a.mode !== "off" && a.new != null ? " " + num(a.new) + " °C" : "")) + " (" + esc(String(a.reason).replace("_", " ")) + ")"
         : a.action === "hold_end_kept_for_event" ? "Manual heating ended, kept on for event"
-        : a.action === "lead_time" ? "Lead time " + esc(a.old) + " → " + esc(a.new) + " min" + (a.source !== "room" ? " (reset)" : "")
+        : a.action === "print_caption" ? "Print text: " + esc(a.new)
+        : a.action === "lead_time" ? (a.room === "all" ? "Lead time for all rooms: " + esc(a.new) + " min" : "Lead time " + esc(a.old) + " → " + esc(a.new) + " min" + (a.source !== "room" ? " (back to all rooms)" : ""))
         : esc(a.action) + " " + esc(a.new || "");
       return "<tr data-room=\"" + esc(a.room) + "\"><td class=\"a-time\">" + new Date(a.ts * 1000).toLocaleString([], { timeZone: TZ, dateStyle: "short", timeStyle: "short" }) + "</td><td class=\"a-room\">" + esc(a.room) + "</td><td class=\"a-change\">" + change + "</td><td class=\"mono a-client\">" + esc(a.client) + "</td></tr>";
     }).join("") || '<tr><td colspan="4" class="muted">No changes yet.</td></tr>';
@@ -356,7 +359,8 @@ var LOG_Q = "";
           : a.action === "hold_end_eco" ? "Manual heating ended → Eco (" + esc(a.new) + ")"
           : a.action === "restore_default" ? "Back to room settings: " + esc(MODE_LABEL[a.mode] || a.mode) + (a.preset ? " · preset " + esc(presetLabel(a.preset)) : (a.mode !== "off" && a.new != null ? " " + num(a.new) + " °C" : "")) + " (" + esc(String(a.reason).replace("_", " ")) + ")"
           : a.action === "hold_end_kept_for_event" ? "Manual heating ended, kept on for event"
-        : a.action === "lead_time" ? "Lead time " + esc(a.old) + " → " + esc(a.new) + " min" + (a.source !== "room" ? " (reset)" : "")
+        : a.action === "print_caption" ? "Print text: " + esc(a.new)
+        : a.action === "lead_time" ? (a.room === "all" ? "Lead time for all rooms: " + esc(a.new) + " min" : "Lead time " + esc(a.old) + " → " + esc(a.new) + " min" + (a.source !== "room" ? " (back to all rooms)" : ""))
           : esc(a.action) + " " + esc(a.new || "");
         return "<tr data-room=\"" + esc(a.room) + "\"><td class=\"a-time\">" + new Date(a.ts * 1000).toLocaleString([], { timeZone: TZ, dateStyle: "short", timeStyle: "short" }) + "</td><td class=\"a-room\">" + esc(a.room) + "</td><td class=\"a-change\">" + change + "</td><td class=\"mono a-client\">" + esc(a.client) + "</td></tr>";
       }).join("") || '<tr><td colspan="4" class="muted">No changes yet.</td></tr>';
@@ -376,7 +380,7 @@ var LOG_Q = "";
     input.value = opts.value || "";
     input.type = opts.text_input ? "text" : "password";
     input.setAttribute("inputmode", opts.text_input ? "text" : "numeric");
-    input.maxLength = opts.text_input ? 64 : 8;
+    input.maxLength = opts.maxLength || (opts.text_input ? 64 : 8);
     input.placeholder = opts.placeholder || "PIN";
     input.classList.toggle("text", !!opts.text_input);
     var ok = $("#dlg-ok");
@@ -424,7 +428,7 @@ var LOG_Q = "";
       lrb.disabled = true;
       return sendRoom(lrid, "lead_time", { lead_minutes: null }).then(function (row) {
         replaceRoom(row);
-        flash(row.name + ": lead time back to " + row.lead_minutes + " min (" + (row.lead_source === "entity" ? row.lead_time : "add-on default") + ")");
+        flash(row.name + ": lead time back to " + row.lead_minutes + " min (all rooms)");
       }).catch(function (e) { renderRooms(); flash(e.message); });
     }
     var tb = ev.target.closest("button[data-temp]");
@@ -465,6 +469,18 @@ var LOG_Q = "";
         onOk: function (v) { return postJson("api/rooms/" + encodeURIComponent(cid) + "/code", { code: v }); }
       });
     }
+    var cap = ev.target.closest("[data-caption]");
+    if (cap) {
+      var capId = cap.getAttribute("data-caption"), capRoom = roomById(capId);
+      return dialog({
+        title: "Print text for " + (capRoom ? capRoom.name : capId),
+        text: "Shown under this room's QR code on the print sheet (max 80 characters). Leave empty to use the text for all rooms.",
+        input: true, text_input: true, maxLength: 80, placeholder: "e.g. Scanează- Termostat",
+        value: capRoom && capRoom.own_caption ? capRoom.print_caption : "",
+        okLabel: "Save",
+        onOk: function (v) { return postJson("api/rooms/" + encodeURIComponent(capId) + "/caption", { caption: v === "" ? null : v }); }
+      });
+    }
     var rd = ev.target.closest("[data-readable]");
     if (rd) {
       var rid2 = rd.getAttribute("data-readable");
@@ -482,6 +498,28 @@ var LOG_Q = "";
       title: "New random code for " + id + "?", text: "Replaces the current code (also a custom one). The printed code stops working immediately. Print the new one afterwards.",
       okLabel: "New random code", danger: true,
       onOk: function () { return postJson("api/rooms/" + encodeURIComponent(id) + "/rotate", {}); }
+    });
+  });
+  $("#lead-all").addEventListener("click", function () {
+    var cur = ROOMS.length ? ROOMS[0].default_lead_minutes : 120;
+    dialog({
+      title: "Lead time for all rooms",
+      text: "Minutes heating starts before each calendar event, in every room (0 to 600). Replaces any lead time set for a single room. Leave empty to go back to 120 min.",
+      input: true, text_input: true, maxLength: 3, placeholder: "120", value: String(cur),
+      okLabel: "Apply to all rooms",
+      validate: function (v) { return v === "" || (/^\d{1,3}$/.test(v) && Number(v) <= 600) ? null : "Use 0 to 600 whole minutes."; },
+      onOk: function (v) { return postJson("api/lead_time_all", { lead_minutes: v === "" ? null : Number(v) }); }
+    });
+  });
+  $("#caption-all").addEventListener("click", function () {
+    var cur = ROOMS.filter(function (r) { return !r.own_caption; })[0];
+    dialog({
+      title: "Print text for all rooms",
+      text: "Shown under every room's QR code on the print sheet (max 80 characters). Replaces any text set for a single room. Leave empty to go back to “Scanează- Termostat”.",
+      input: true, text_input: true, maxLength: 80, placeholder: "Scanează- Termostat",
+      value: cur ? cur.print_caption : "",
+      okLabel: "Apply to all rooms",
+      onOk: function (v) { return postJson("api/caption_all", { caption: v === "" ? null : v }); }
     });
   });
   $("#vo-all").addEventListener("click", function () {

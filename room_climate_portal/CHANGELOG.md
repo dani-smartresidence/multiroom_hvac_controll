@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.11.0
+- **Lead time 120 min for all rooms** out of the box. New admin button **Lead time: all rooms** sets one value for
+  every room (it replaces any single-room value); the per-room field still overrides it. Lead-time helpers in HA and
+  the `default_lead_minutes` / `lead_time_label` options are no longer used.
+- **Print text** under each QR code is now yours to set: **Print text: all rooms** (default "Scanează- Termostat")
+  or per room with **Edit** in the QR code column. Saved in `/data/room_settings.json`.
+
 ## 0.10.0
 - **Lead time per room on the admin page.** The "Calendar & lead time" column has a "Start … min before events"
   field (0 to 600 min) and a Reset button. Preconditioning, the room page and `sensor.<room>_next_precondition`
