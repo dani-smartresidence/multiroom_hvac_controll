@@ -14,13 +14,17 @@ from .ha import HAClient, HAError
 from .pins import PinStore
 from .holds import DefaultsStore, HoldError, HoldStore, parse_hhmm
 from .rooms import Room, clamp_setpoint, discover, load_overrides
-from .schedule import build_events, lead_minutes_from_state, next_precondition
+from .schedule import build_events, next_precondition
 from .tokens import TokenStore
 
 _LOGGER = logging.getLogger(__name__)
 
 SCHEDULE_REFRESH_S = 300
 MAX_LEAD_MINUTES = 600
+DEFAULT_LEAD_MINUTES = 120
+DEFAULT_PRINT_CAPTION = "Scanează- Termostat"
+MAX_CAPTION_LEN = 80
+ALL_ROOMS = "*"  # room_settings key for values that apply to every room
 REGISTRY_EVENTS = (
     "area_registry_updated",
     "entity_registry_updated",
@@ -162,7 +166,7 @@ class Portal:
             room = self.rooms.get(rid)
             if room is None:
                 continue
-            if entity_id in (room.calendar, room.lead_time):
+            if entity_id == room.calendar:
                 asyncio.create_task(self.refresh_schedule(rid))
             else:
                 self.broadcast(rid, {"type": "room", "room": self.snapshot(rid)})
@@ -181,29 +185,92 @@ class Portal:
         await asyncio.gather(*(self.refresh_schedule(r) for r in list(self.rooms)), return_exceptions=True)
 
     def lead_source(self, room: Room) -> str:
-        """Where the room's lead time comes from: "room" (admin page), "entity" (HA helper) or "default"."""
-        if isinstance((self.room_settings.get(room.id) or {}).get("lead_minutes"), int):
-            return "room"
-        return "entity" if room.lead_time else "default"
+        """Where the room's lead time comes from: "room" (set for this room) or "all" (the all-rooms value)."""
+        return "room" if isinstance((self.room_settings.get(room.id) or {}).get("lead_minutes"), int) else "all"
+
+    def default_lead_minutes(self) -> int:
+        saved = (self.room_settings.get(ALL_ROOMS) or {}).get("lead_minutes")
+        return saved if isinstance(saved, int) else DEFAULT_LEAD_MINUTES
 
     def lead_minutes(self, room: Room) -> int:
-        """Pre-heat/pre-cool lead before each event. Calendar events never carry one: the room's
-        admin-page setting wins, then the room's lead-time entity, then the add-on default."""
+        """Pre-heat/pre-cool lead before each event, set on the admin page. Calendar events never
+        carry one: the room's own value wins, else the value for all rooms (120 min out of the box)."""
         saved = (self.room_settings.get(room.id) or {}).get("lead_minutes")
-        if isinstance(saved, int):
-            return saved
-        st = self.states.get(room.lead_time) if room.lead_time else None
-        return lead_minutes_from_state(st, self.options.default_lead_minutes)
+        return saved if isinstance(saved, int) else self.default_lead_minutes()
+
+    @staticmethod
+    def _check_lead(minutes) -> None:
+        if not isinstance(minutes, int) or isinstance(minutes, bool) or not 0 <= minutes <= MAX_LEAD_MINUTES:
+            raise ValueError("bad lead time")
+
+    async def set_lead_minutes_all(self, minutes: int | None, client: str = "admin") -> int:
+        """Admin page: one lead time for every room (replaces each room's own); None = 120 min."""
+        if minutes is None:
+            self.room_settings.clear(ALL_ROOMS, "lead_minutes")
+        else:
+            self._check_lead(minutes)
+            self.room_settings.update(ALL_ROOMS, lead_minutes=minutes)
+        for rid in list(self.room_settings.data):
+            if rid != ALL_ROOMS and "lead_minutes" in (self.room_settings.get(rid) or {}):
+                self.room_settings.clear(rid, "lead_minutes")
+        new = self.default_lead_minutes()
+        self.audit.write(room="all", action="lead_time", new=new, source="all", client=client)
+        await self.refresh_all_schedules()
+        return new
+
+    # ------------------------------------------------------------ print caption
+    def default_print_caption(self) -> str:
+        saved = (self.room_settings.get(ALL_ROOMS) or {}).get("print_caption")
+        return saved if isinstance(saved, str) else DEFAULT_PRINT_CAPTION
+
+    def print_caption(self, room_id: str) -> str:
+        """Text printed under the room's QR code: the room's own, else the one for all rooms."""
+        saved = (self.room_settings.get(room_id) or {}).get("print_caption")
+        return saved if isinstance(saved, str) else self.default_print_caption()
+
+    def has_own_caption(self, room_id: str) -> bool:
+        return isinstance((self.room_settings.get(room_id) or {}).get("print_caption"), str)
+
+    @staticmethod
+    def _clean_caption(text) -> str:
+        if not isinstance(text, str):
+            raise ValueError("bad caption")
+        text = " ".join(text.split())
+        if len(text) > MAX_CAPTION_LEN:
+            raise ValueError("caption too long")
+        return text
+
+    def set_print_caption(self, room_id: str, text: str | None) -> str:
+        """Admin page: the room's print caption; None goes back to the text for all rooms."""
+        if text is None:
+            self.room_settings.clear(room_id, "print_caption")
+        else:
+            self.room_settings.update(room_id, print_caption=self._clean_caption(text))
+        new = self.print_caption(room_id)
+        self.audit.write(room=room_id, action="print_caption", new=new, client="admin")
+        return new
+
+    def set_print_caption_all(self, text: str | None) -> str:
+        """Admin page: the caption for every room (replaces each room's own text); None = built-in default."""
+        if text is None:
+            self.room_settings.clear(ALL_ROOMS, "print_caption")
+        else:
+            self.room_settings.update(ALL_ROOMS, print_caption=self._clean_caption(text))
+        for rid in list(self.room_settings.data):
+            if rid != ALL_ROOMS and self.has_own_caption(rid):
+                self.room_settings.clear(rid, "print_caption")
+        new = self.default_print_caption()
+        self.audit.write(room="all", action="print_caption", new=new, client="admin")
+        return new
 
     async def set_lead_minutes(self, room_id: str, minutes: int | None, client: str = "admin") -> int:
-        """Admin page: the room's lead time in minutes, or None to go back to the entity / default."""
+        """Admin page: the room's lead time in minutes, or None to go back to the value for all rooms."""
         room = self.rooms[room_id]
         old = self.lead_minutes(room)
         if minutes is None:
             self.room_settings.clear(room_id, "lead_minutes")
         else:
-            if not isinstance(minutes, int) or isinstance(minutes, bool) or not 0 <= minutes <= MAX_LEAD_MINUTES:
-                raise ValueError("bad lead time")
+            self._check_lead(minutes)
             self.room_settings.update(room_id, lead_minutes=minutes)
         new = self.lead_minutes(room)
         self.audit.write(room=room_id, action="lead_time", old=old, new=new, source=self.lead_source(room), client=client)

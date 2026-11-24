@@ -7,7 +7,6 @@ rooms:
     subtitle: Etaj 2 · Sală conferințe
     climate: climate.camera_204
     calendar: calendar.camera_204
-    lead_time: input_number.camera_204_precondition_minutes
     humidity: sensor.camera_204_humidity
     min_temp: 18
     max_temp: 25

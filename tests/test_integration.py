@@ -55,10 +55,10 @@ async def test_room_snapshot(env):
     assert data["climate"]["current"] == 21.4 and data["climate"]["target"] == 22.5
     assert data["climate"]["min"] == 16 and data["climate"]["max"] == 25
     assert data["humidity"] == 44 and data["outdoor"] == 6
-    assert data["lead_minutes"] == 45
+    assert data["lead_minutes"] == 120  # default for all rooms
     first = data["events"][0]
-    assert first["summary"] == "Ședința consiliului" and first["lead_minutes"] == 45
-    assert data["events"][1]["lead_minutes"] == 45  # "precondition: 30" in the event is ignored
+    assert first["summary"] == "Ședința consiliului" and first["lead_minutes"] == 120
+    assert data["events"][1]["lead_minutes"] == 120  # "precondition: 30" in the event is ignored
     assert r.headers["Content-Security-Policy"].startswith("default-src 'self'")
     assert r.headers["Referrer-Policy"] == "no-referrer"
 
@@ -289,7 +289,7 @@ async def test_hold_actions(env):
 
 async def test_hold_end_keeps_heating_during_event(env):
     fake, portal, guest, _ = env
-    # camera_204 is preconditioning for an event that starts in 29 min (lead 45 min).
+    # camera_204 is preconditioning for an event that starts in 29 min (lead 120 min).
     tok = portal.tokens.token_for("camera_204")
     r = await guest.post(f"/camera/api/{tok}/hold", json={"action": "start", "minutes": 30})
     assert r.status == 200
@@ -509,35 +509,60 @@ async def test_start_uses_heat_preset(env):
 async def test_admin_sets_lead_time_per_room(env):
     fake, portal, guest, admin = env
     rows = {r["id"]: r for r in await (await admin.get("/api/rooms")).json()}
-    assert rows["camera_204"]["lead_minutes"] == 45 and rows["camera_204"]["lead_source"] == "entity"
+    assert rows["camera_204"]["lead_minutes"] == 120 and rows["camera_204"]["lead_source"] == "all"
 
     r = await admin.post("/api/rooms/camera_204/lead_time", json={"lead_minutes": 90})
     assert r.status == 200
     row = await r.json()
     assert row["lead_minutes"] == 90 and row["lead_source"] == "room"
-    ev = portal.schedules["camera_204"][0]
-    assert ev["lead_minutes"] == 90
+    assert portal.schedules["camera_204"][0]["lead_minutes"] == 90
     assert fake.published["sensor.camera_204_next_precondition"]["attributes"]["lead_minutes"] == 90
     assert portal.audit.tail(1)[0]["action"] == "lead_time"
 
-    # The admin value wins over the HA helper, also when the helper changes.
+    # The HA helper is not read any more.
     await fake.set_state("input_number.camera_204_precondition_minutes", "20.0", {"unit_of_measurement": "min"})
     await asyncio.sleep(0.2)
     assert portal.lead_minutes(portal.rooms["camera_204"]) == 90
 
-    # The guest page shows the new lead time.
     tok = portal.tokens.token_for("camera_204")
     data = await (await guest.get(f"/camera/api/{tok}")).json()
     assert data["lead_minutes"] == 90 and all(e["lead_minutes"] in (90, None) for e in data["events"])
 
     for bad in (-5, 601, 12.5, "abc", True):
         assert (await admin.post("/api/rooms/camera_204/lead_time", json={"lead_minutes": bad})).status == 400
+        assert (await admin.post("/api/lead_time_all", json={"lead_minutes": bad})).status == 400
 
-    # Reset: back to the helper's value.
     row = await (await admin.post("/api/rooms/camera_204/lead_time", json={"lead_minutes": None})).json()
-    assert row["lead_source"] == "entity" and row["lead_minutes"] == 20
+    assert row["lead_source"] == "all" and row["lead_minutes"] == 120
 
-    # Saved across restarts.
-    await admin.post("/api/rooms/camera_102/lead_time", json={"lead_minutes": 0})
+    # All rooms: one value, replacing single-room values.
+    await admin.post("/api/rooms/camera_101/lead_time", json={"lead_minutes": 30})
+    rows = await (await admin.post("/api/lead_time_all", json={"lead_minutes": 60})).json()
+    assert {r["id"]: (r["lead_minutes"], r["lead_source"]) for r in rows} == {
+        "camera_101": (60, "all"), "camera_102": (60, "all"), "camera_204": (60, "all")}
+    assert portal.schedules["camera_204"][0]["lead_minutes"] == 60
     from portal.holds import DefaultsStore
-    assert DefaultsStore(portal.paths.room_settings).get("camera_102") == {"lead_minutes": 0}
+    assert DefaultsStore(portal.paths.room_settings).get("*") == {"lead_minutes": 60}
+    rows = await (await admin.post("/api/lead_time_all", json={"lead_minutes": None})).json()
+    assert all(r["lead_minutes"] == 120 for r in rows)
+
+
+async def test_print_caption(env):
+    _, portal, _, admin = env
+    page = await (await admin.get("/print")).text()
+    assert page.count('<div class="hint">Scanează- Termostat</div>') == 3
+
+    row = await (await admin.post("/api/rooms/camera_204/caption", json={"caption": "  Scan <me>  "})).json()
+    assert row["print_caption"] == "Scan <me>" and row["own_caption"]
+    page = await (await admin.get("/print?room=camera_204")).text()
+    assert '<div class="hint">Scan &lt;me&gt;</div>' in page
+    assert (await admin.post("/api/rooms/camera_204/caption", json={"caption": "x" * 81})).status == 400
+
+    rows = await (await admin.post("/api/caption_all", json={"caption": "Termostat camera"})).json()
+    assert all(r["print_caption"] == "Termostat camera" and not r["own_caption"] for r in rows)
+    await admin.post("/api/rooms/camera_101/caption", json={"caption": ""})  # empty text is allowed
+    assert portal.print_caption("camera_101") == ""
+    row = await (await admin.post("/api/rooms/camera_101/caption", json={"caption": None})).json()
+    assert row["print_caption"] == "Termostat camera"
+    rows = await (await admin.post("/api/caption_all", json={"caption": None})).json()
+    assert all(r["print_caption"] == "Scanează- Termostat" for r in rows)

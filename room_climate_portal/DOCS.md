@@ -12,7 +12,7 @@ before each one. Everything comes from Home Assistant; the add-on never keeps it
 | Area | One Area per room (Settings → Areas). Put the label **`qr_room`** on it. |
 | Thermostat | The room's `climate` entity assigned to that Area (directly or through its device). |
 | Calendar | One calendar per room in the Area, e.g. a Local Calendar `calendar.camera_204`. |
-| Lead time | Set per room on the admin page (**Calendar & lead time** column: "Start … min before events"). Rooms without one there use a `sensor` / `input_number` (minutes) in the Area, labelled **`precondition_lead`** or with `precondition` in its entity id, if any, else the default from the options (45 min). |
+| Lead time | Set on the admin page: **Lead time: all rooms** (120 min out of the box) and, per room, the "Start … min before events" field in the **Calendar & lead time** column. Lead-time helpers in HA are no longer read. |
 | Humidity (optional) | Any humidity sensor in the Area is shown automatically. |
 
 An event description may carry one optional line:
@@ -35,6 +35,9 @@ room's lead time on the admin page instead.
 - **pin_remember_hours / pin_max_attempts / pin_lockout_minutes**: PIN behaviour (PINs are set on the admin page).
 - **publish_precondition_sensors**: creates `sensor.<area_id>_next_precondition` (timestamp) with
   the attributes `target_temperature`, `event_summary`, `event_start`, `climate_entity`.
+
+**Print text**: the line under each QR code on the print sheet. Set it for every room with **Print text: all rooms**
+(default "Scanează- Termostat") or per room with **Edit** next to "Print text" in the QR code column.
 
 Per-room overrides: copy `rooms.example.yaml` to `/addon_configs/<id>_room_climate_portal/rooms.yaml`.
 

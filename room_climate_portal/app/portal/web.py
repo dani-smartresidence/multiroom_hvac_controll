@@ -354,7 +354,9 @@ def build_admin_app(portal: Portal) -> web.Application:
             "step": snap["climate"]["step"],
             "lead_minutes": snap["lead_minutes"],
             "lead_source": portal.lead_source(room),
-            "default_lead_minutes": portal.options.default_lead_minutes,
+            "print_caption": portal.print_caption(rid),
+            "own_caption": portal.has_own_caption(rid),
+            "default_lead_minutes": portal.default_lead_minutes(),
             "next_event": next((e for e in snap["events"] if not e["all_day"]), None),
             "open_pages": portal.watcher_count(rid),
             "pin_enabled": portal.pins.enabled(rid),
@@ -505,24 +507,61 @@ def build_admin_app(portal: Portal) -> web.Application:
     async def admin_lead_time(request):
         rid = get_room(request)
         data = await admin_body(request)
-        value = data.get("lead_minutes")
-        if value in (None, ""):
-            minutes = None
-        else:
-            try:
-                if isinstance(value, bool):
-                    raise ValueError
-                f = float(value)
-                if f != f or f != int(f):
-                    raise ValueError
-                minutes = int(f)
-            except (TypeError, ValueError, OverflowError):
-                return _json({"error": "Lead time must be a whole number of minutes"}, 400)
+        try:
+            minutes = parse_minutes(data.get("lead_minutes"))
+        except ValueError:
+            return _json({"error": "Lead time must be a whole number of minutes"}, 400)
         try:
             await portal.set_lead_minutes(rid, minutes)
         except ValueError:
             return _json({"error": "Lead time must be 0 to 600 minutes"}, 400)
         return _json(room_row(rid))
+
+    @routes.post("/api/lead_time_all")
+    async def admin_lead_time_all(request):
+        data = await admin_body(request)
+        try:
+            minutes = parse_minutes(data.get("lead_minutes"))
+        except ValueError:
+            return _json({"error": "Lead time must be a whole number of minutes"}, 400)
+        try:
+            await portal.set_lead_minutes_all(minutes)
+        except ValueError:
+            return _json({"error": "Lead time must be 0 to 600 minutes"}, 400)
+        return _json([room_row(rid) for rid in portal.rooms])
+
+    def parse_minutes(value) -> int | None:
+        """None / "" -> None (reset); else a whole number of minutes, or ValueError."""
+        if value in (None, ""):
+            return None
+        if isinstance(value, bool):
+            raise ValueError
+        try:
+            f = float(value)
+            if f != f or f != int(f):
+                raise ValueError
+            return int(f)
+        except (TypeError, OverflowError):
+            raise ValueError
+
+    @routes.post("/api/rooms/{room_id}/caption")
+    async def admin_caption(request):
+        rid = get_room(request)
+        data = await admin_body(request)
+        try:
+            portal.set_print_caption(rid, data.get("caption"))
+        except ValueError:
+            return _json({"error": "Use at most 80 characters"}, 400)
+        return _json(room_row(rid))
+
+    @routes.post("/api/caption_all")
+    async def admin_caption_all(request):
+        data = await admin_body(request)
+        try:
+            portal.set_print_caption_all(data.get("caption"))
+        except ValueError:
+            return _json({"error": "Use at most 80 characters"}, 400)
+        return _json([room_row(rid) for rid in portal.rooms])
 
     @routes.post("/api/rooms/{room_id}/pin")
     async def set_pin(request):
@@ -578,7 +617,7 @@ def build_admin_app(portal: Portal) -> web.Application:
                 f"""<div class="card"><div class="qr">{qr_svg(portal.room_url(rid), 8)}</div>
 <div class="name">{html.escape(room.name)}</div>
 <div class="sub">{html.escape(room.subtitle)}</div>
-<div class="hint">Scanați pentru temperatura camerei<br><span>Scan to control this room's temperature</span></div></div>"""
+<div class="hint">{html.escape(portal.print_caption(rid))}</div></div>"""
             )
         page = (STATIC / "admin" / "print.html").read_text(encoding="utf-8").replace("__CARDS__", "\n".join(cards))
         return web.Response(text=page, content_type="text/html")
