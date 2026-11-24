@@ -185,6 +185,20 @@ var LOG_Q = "";
     }, 700);
   }
   document.addEventListener("change", function (ev) {
+    var li = ev.target.closest("input[data-lead]");
+    if (li) {
+      var lid = li.getAttribute("data-lead"), lr = roomById(lid), raw = li.value.trim();
+      var mins = Number(raw);
+      if (raw === "" || !Number.isInteger(mins) || mins < 0 || mins > 600) {
+        renderRooms();
+        return flash((lr ? lr.name : lid) + ": lead time must be 0 to 600 whole minutes");
+      }
+      li.disabled = true;
+      return sendRoom(lid, "lead_time", { lead_minutes: mins }).then(function (row) {
+        replaceRoom(row);
+        flash(row.name + ": heating starts " + mins + " min before events");
+      }).catch(function (e) { renderRooms(); flash((lr ? lr.name : lid) + ": " + e.message); });
+    }
     var vo = ev.target.closest("input[data-vo]");
     if (vo) {
       var vid = vo.getAttribute("data-vo"), want = vo.checked;
@@ -219,6 +233,17 @@ var LOG_Q = "";
     });
   });
 
+  // Pre-heat lead before each calendar event, set per room here (events don't carry one).
+  function leadCell(r) {
+    var src = r.lead_source === "room" ? "set here"
+      : r.lead_source === "entity" ? "from " + r.lead_time
+      : "add-on default";
+    return '<div class="lead"><label>Start <input type="number" class="lead-in" min="0" max="600" step="5" inputmode="numeric" data-lead="' +
+      esc(r.id) + '" value="' + esc(r.lead_minutes) + '" aria-label="Lead time in minutes"> min before events</label>' +
+      (r.lead_source === "room" ? ' <button type="button" class="small" data-lead-reset="' + esc(r.id) + '">Reset</button>' : "") +
+      '</div><div class="muted small mono">' + esc(src) + "</div>";
+  }
+
   function row(r) {
     var issues = (r.issues || []).map(function (i) { return '<span class="issue">' + esc(i) + "</span>"; }).join(" ");
     var ev = r.next_event;
@@ -231,7 +256,7 @@ var LOG_Q = "";
         (issues ? "<div>" + issues + "</div>" : "") + "</td>" +
       "<td class=\"c-now\">" + nowCell(r) + "</td>" +
       "<td class=\"c-temp\">" + climateCell(r) + "</td>" +
-      "<td class=\"mono c-x\"><div class=\"mlbl\">Calendar &amp; lead time</div>" + esc(r.calendar || "–") + "<div>" + esc(r.lead_time || "default") + " → " + esc(r.lead_minutes) + " min</div></td>" +
+      "<td class=\"c-x\"><div class=\"mlbl\">Calendar &amp; lead time</div><div class=\"mono\">" + esc(r.calendar || "–") + "</div>" + leadCell(r) + "</td>" +
       "<td class=\"c-x\"><div class=\"mlbl\">Next event</div>" + (ev ? esc(ev.summary) + "<div class=\"muted\">" + time(ev.start) + "</div><div class=\"muted\">precondition " + time(ev.precondition_start) + "</div>" : "<span class=\"muted\">none</span>") + "</td>" +
       "<td class=\"c-x c-qr\"><div class=\"mlbl\">QR code</div><a href=\"print?auto=1&room=" + encodeURIComponent(r.id) + "\" target=\"_blank\" rel=\"noopener\"><img class=\"qr\" alt=\"QR\" src=\"qr/" + encodeURIComponent(r.id) + ".svg?g=" + r.generation + "&c=" + encodeURIComponent(r.url.split("/").pop()) + "\"></a>" +
       "<div class=\"url\">" + esc(r.url) + " <b>(" + esc(r.code_kind || "random") + ")</b></div>" +
@@ -282,6 +307,7 @@ var LOG_Q = "";
         : a.action === "hold_end_eco" ? "Manual heating ended → Eco (" + esc(a.new) + ")"
         : a.action === "restore_default" ? "Back to room settings: " + esc(MODE_LABEL[a.mode] || a.mode) + (a.preset ? " · preset " + esc(presetLabel(a.preset)) : (a.mode !== "off" && a.new != null ? " " + num(a.new) + " °C" : "")) + " (" + esc(String(a.reason).replace("_", " ")) + ")"
         : a.action === "hold_end_kept_for_event" ? "Manual heating ended, kept on for event"
+        : a.action === "lead_time" ? "Lead time " + esc(a.old) + " → " + esc(a.new) + " min" + (a.source !== "room" ? " (reset)" : "")
         : esc(a.action) + " " + esc(a.new || "");
       return "<tr data-room=\"" + esc(a.room) + "\"><td class=\"a-time\">" + new Date(a.ts * 1000).toLocaleString([], { timeZone: TZ, dateStyle: "short", timeStyle: "short" }) + "</td><td class=\"a-room\">" + esc(a.room) + "</td><td class=\"a-change\">" + change + "</td><td class=\"mono a-client\">" + esc(a.client) + "</td></tr>";
     }).join("") || '<tr><td colspan="4" class="muted">No changes yet.</td></tr>';
@@ -330,6 +356,7 @@ var LOG_Q = "";
           : a.action === "hold_end_eco" ? "Manual heating ended → Eco (" + esc(a.new) + ")"
           : a.action === "restore_default" ? "Back to room settings: " + esc(MODE_LABEL[a.mode] || a.mode) + (a.preset ? " · preset " + esc(presetLabel(a.preset)) : (a.mode !== "off" && a.new != null ? " " + num(a.new) + " °C" : "")) + " (" + esc(String(a.reason).replace("_", " ")) + ")"
           : a.action === "hold_end_kept_for_event" ? "Manual heating ended, kept on for event"
+        : a.action === "lead_time" ? "Lead time " + esc(a.old) + " → " + esc(a.new) + " min" + (a.source !== "room" ? " (reset)" : "")
           : esc(a.action) + " " + esc(a.new || "");
         return "<tr data-room=\"" + esc(a.room) + "\"><td class=\"a-time\">" + new Date(a.ts * 1000).toLocaleString([], { timeZone: TZ, dateStyle: "short", timeStyle: "short" }) + "</td><td class=\"a-room\">" + esc(a.room) + "</td><td class=\"a-change\">" + change + "</td><td class=\"mono a-client\">" + esc(a.client) + "</td></tr>";
       }).join("") || '<tr><td colspan="4" class="muted">No changes yet.</td></tr>';
@@ -391,6 +418,15 @@ var LOG_Q = "";
   document.addEventListener("click", function (ev) {
     var mb = ev.target.closest("button[data-more]");
     if (mb) { var mid = mb.getAttribute("data-more"); OPEN[mid] = !OPEN[mid]; return renderRooms(); }
+    var lrb = ev.target.closest("button[data-lead-reset]");
+    if (lrb) {
+      var lrid = lrb.getAttribute("data-lead-reset");
+      lrb.disabled = true;
+      return sendRoom(lrid, "lead_time", { lead_minutes: null }).then(function (row) {
+        replaceRoom(row);
+        flash(row.name + ": lead time back to " + row.lead_minutes + " min (" + (row.lead_source === "entity" ? row.lead_time : "add-on default") + ")");
+      }).catch(function (e) { renderRooms(); flash(e.message); });
+    }
     var tb = ev.target.closest("button[data-temp]");
     if (tb) return stepTemp(tb.getAttribute("data-temp"), parseInt(tb.getAttribute("data-dir"), 10));
     if (ev.target.id === "clear") {
@@ -487,7 +523,7 @@ var LOG_Q = "";
   measureSticky();
   setInterval(function () {
     var a = document.activeElement;
-    if (a && a.matches && a.matches("select.mode")) return;  // also preset menus  // don't close an open mode menu
+    if (a && a.matches && a.matches("select.mode, input.lead-in")) return;  // also preset menus  // don't close an open mode menu
     load();
   }, 30000);
 })();

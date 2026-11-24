@@ -353,6 +353,8 @@ def build_admin_app(portal: Portal) -> web.Application:
             "entity_max": (portal.states.get(room.climate or "") or {}).get("attributes", {}).get("max_temp"),
             "step": snap["climate"]["step"],
             "lead_minutes": snap["lead_minutes"],
+            "lead_source": portal.lead_source(room),
+            "default_lead_minutes": portal.options.default_lead_minutes,
             "next_event": next((e for e in snap["events"] if not e["all_day"]), None),
             "open_pages": portal.watcher_count(rid),
             "pin_enabled": portal.pins.enabled(rid),
@@ -497,6 +499,29 @@ def build_admin_app(portal: Portal) -> web.Application:
         except HAError as err:
             return _json({"error": f"Home Assistant: {err.message}"}, 502)
         await asyncio.sleep(0.3)
+        return _json(room_row(rid))
+
+    @routes.post("/api/rooms/{room_id}/lead_time")
+    async def admin_lead_time(request):
+        rid = get_room(request)
+        data = await admin_body(request)
+        value = data.get("lead_minutes")
+        if value in (None, ""):
+            minutes = None
+        else:
+            try:
+                if isinstance(value, bool):
+                    raise ValueError
+                f = float(value)
+                if f != f or f != int(f):
+                    raise ValueError
+                minutes = int(f)
+            except (TypeError, ValueError, OverflowError):
+                return _json({"error": "Lead time must be a whole number of minutes"}, 400)
+        try:
+            await portal.set_lead_minutes(rid, minutes)
+        except ValueError:
+            return _json({"error": "Lead time must be 0 to 600 minutes"}, 400)
         return _json(room_row(rid))
 
     @routes.post("/api/rooms/{room_id}/pin")

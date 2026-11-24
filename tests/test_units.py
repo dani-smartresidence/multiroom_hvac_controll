@@ -4,7 +4,7 @@ from zoneinfo import ZoneInfo
 
 from portal.config import Options
 from portal.rooms import Room, clamp_setpoint, discover
-from portal.schedule import build_events, lead_minutes_from_state, next_precondition, parse_lead, parse_target
+from portal.schedule import build_events, lead_minutes_from_state, next_precondition, parse_target
 from portal.tokens import TokenStore
 
 TZ = ZoneInfo("Europe/Bucharest")
@@ -14,8 +14,6 @@ def test_parse_target_and_lead():
     assert parse_target("target: 22") == 22.0
     assert parse_target("Țintă = 21,5") == 21.5
     assert parse_target("nothing") is None
-    assert parse_lead("precondition: 60") == 60
-    assert parse_lead("Precondiționare: 30") == 30
 
 
 def test_lead_minutes_units():
@@ -37,7 +35,8 @@ def test_build_events_precondition_start():
     assert [e["summary"] for e in evs] == ["A", "B", "allday"]
     assert evs[0]["precondition_start"] == "2026-11-09T13:15:00+02:00"
     assert evs[0]["target"] == 22
-    assert evs[1]["precondition_start"] == "2026-11-10T07:35:00+02:00"
+    # The calendar does not set the lead time: "precondition: 85" in a description is ignored.
+    assert evs[1]["precondition_start"] == "2026-11-10T08:15:00+02:00" and evs[1]["lead_minutes"] == 45
     assert evs[1]["target"] == 21
     assert evs[2]["all_day"] and evs[2]["precondition_start"] is None
     assert next_precondition(evs, now)["summary"] == "A"

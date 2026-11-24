@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.10.0
+- **Lead time per room on the admin page.** The "Calendar & lead time" column has a "Start … min before events"
+  field (0 to 600 min) and a Reset button. Preconditioning, the room page and `sensor.<room>_next_precondition`
+  use it right away; it is saved in `/data/room_settings.json` and logged in Recent changes.
+- Calendar events no longer set the lead time: a `precondition:` line in an event description is ignored.
+  Rooms without an admin value keep using their lead-time entity, then the `default_lead_minutes` option (45 min).
+- A room without a lead-time entity is no longer flagged as an issue.
+
 ## 0.9.4
 - The heating glow, flame and "Încălzire" label (room page and admin) now appear only while the thermostat
   reports `hvac_action: heating`. Heat mode, the Încălzire preset or a running timer alone no longer show it.

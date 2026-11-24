@@ -57,11 +57,22 @@ class DefaultsStore:
         entry = dict(self.data.get(room_id) or {})
         entry.update({k: v for k, v in values.items() if v is not None})
         self.data[room_id] = entry
+        self._save()
+        return entry
+
+    def clear(self, room_id: str, *keys: str) -> dict:
+        entry = dict(self.data.get(room_id) or {})
+        for k in keys:
+            entry.pop(k, None)
+        self.data[room_id] = entry
+        self._save()
+        return entry
+
+    def _save(self) -> None:
         self._path.parent.mkdir(parents=True, exist_ok=True)
         tmp = self._path.with_suffix(".tmp")
         tmp.write_text(json.dumps(self.data, indent=2), encoding="utf-8")
         tmp.replace(self._path)
-        return entry
 
 
 class HoldStore:
