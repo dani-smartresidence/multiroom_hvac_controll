@@ -1,0 +1,110 @@
+configuration:
+  public_url:
+    name: URL public
+    description: Adresa folosită de telefoane, fără cale, de exemplu https://ha.voxdomini.ro. Codurile QR duc la <public_url><base_path>/<cod>.
+  base_path:
+    name: Cale de bază
+    description: Calea sub care sunt paginile camerelor, de exemplu /camera. Reverse proxy-ul trimite această cale la portul 8080 al add-on-ului.
+  default_language:
+    name: Limba implicită a paginilor
+    description: Limba în care se deschide pagina camerei. Oaspeții pot alege între română și engleză.
+  room_label:
+    name: Eticheta camerelor
+    description: Eticheta HA pusă pe fiecare zonă (Area) care primește o pagină cu cod QR.
+  outdoor_sensor:
+    name: Senzor de temperatură exterioară
+    description: Senzor opțional, afișat ca „Exterior” pe paginile camerelor și folosit la estimări și la logare.
+  min_temp:
+    name: Temperatura minimă
+    description: Cea mai mică temperatură pe care o pot seta oaspeții (°C). Se poate schimba pe cameră.
+  max_temp:
+    name: Temperatura maximă
+    description: Cea mai mare temperatură pe care o pot seta oaspeții (°C). Se poate schimba pe cameră.
+  temp_step:
+    name: Pasul temperaturii
+    description: Cât schimbă butoanele + / - (°C).
+  default_target_temp:
+    name: Ținta implicită a evenimentelor
+    description: Temperatura țintă a unui eveniment când descrierea lui nu are o linie „target:”.
+  schedule_days:
+    name: Zile de program
+    description: Pentru câte zile înainte afișează pagina camerei evenimentele.
+  allow_mode_change:
+    name: Permite schimbarea modului
+    description: Oaspeții pot schimba modul termostatului (altfel doar temperatura).
+  publish_precondition_sensors:
+    name: Publică senzorii de preîncălzire
+    description: Creează în HA sensor.<cameră>_next_precondition (timestamp), ca automatizările să pornească preîncălzirea exact la ora afișată pe pagină.
+  rate_limit_seconds:
+    name: Secunde între modificări, pe cameră
+  max_changes_per_hour:
+    name: Modificări pe oră, pe telefon
+  trust_proxy_headers:
+    name: Acceptă X-Forwarded-For
+    description: Activează doar când portul pentru oaspeți e în spatele propriului reverse proxy.
+  help_text:
+    name: Text de ajutor
+    description: Apare pe pagina „cod inactiv”, de exemplu „Întrebați la recepție sau sunați la interiorul 100.”
+  pin_remember_hours:
+    name: Ține minte PIN-ul (ore)
+    description: Cât timp rămâne deblocat un telefon după ce a introdus PIN-ul camerei. PIN-urile se setează pe cameră din pagina de administrare.
+  pin_max_attempts:
+    name: Încercări greșite de PIN până la blocare
+  pin_lockout_minutes:
+    name: Blocare (minute)
+  hold_default_minutes:
+    name: Durata implicită a încălzirii manuale (minute)
+    description: Când un oaspete pornește încălzirea sau schimbă temperatura din pagina camerei, ea se oprește singură după acest timp, dacă nu alege altă oră de final.
+  hold_max_hours:
+    name: Cea mai lungă încălzire manuală (ore)
+  hold_end_action:
+    name: La final, pentru camerele fără setări din administrare
+    description: "Folosit doar pentru camerele în care nu ai setat temperatura sau modul din administrare. off oprește termostatul; setback îl lasă pornit la temperatura de așteptare."
+  setback_temp:
+    name: Temperatura de așteptare (°C)
+  readable_codes:
+    name: Linkuri QR ușor de citit
+    description: "Linkurile camerelor se formează din etaj și numele camerei, de exemplu /camera/demisol-d01-sala-sport, în loc de un cod aleator. Oricine știe numele camerei poate ghici linkul, așa că pune un PIN acestor camere. Oprit = coduri aleatoare."
+  guest_preset_heat:
+    name: Presetul butonului „Încălzire” de pe pagina camerei
+    description: Presetul termostatului pus de butonul „Încălzire” de pe pagina camerei (pornește încălzirea manuală).
+  guest_preset_eco:
+    name: Presetul butonului „Eco” de pe pagina camerei
+    description: Presetul termostatului pus de butonul „Eco” de pe pagina camerei (încheie încălzirea manuală). Oaspeții nu pot opri niciodată termostatul; doar pagina de administrare poate.
+  manual_end:
+    name: Când se termină încălzirea manuală
+    description: "eco: termostatul trece pe presetul Eco (guest_preset_eco) la finalul timerului sau când oaspetele apasă Încheie. room_settings: revine la setările alese în administrare. Camerele fără acel preset revin mereu la setările din administrare."
+  restore_after_events:
+    name: Revino la setările camerei după evenimente
+    description: Când se termină încălzirea pentru un eveniment (sau evenimentul e șters), termostatul revine la temperatura și modul alese în administrare.
+  frost_temp:
+    name: Antiîngheț (°C)
+    description: Sub această temperatură, orice cameră încălzită pornește circuitul, chiar și fără eveniment.
+  hysteresis:
+    name: Histerezis (°C)
+    description: În timpul evenimentului, circuitul pornește sub țintă minus această valoare și se oprește peste țintă plus această valoare.
+  min_switch_minutes:
+    name: Minute între comutări
+    description: Cel mai scurt timp între două comutări ale aceluiași circuit (antiîngheț-ul nu așteaptă).
+  coast_drop:
+    name: Scădere permisă la final (°C)
+    description: Încălzirea se oprește înainte de finalul evenimentului cât timp camera pierde cel mult atâtea grade până la final.
+  max_coast_minutes:
+    name: Cea mai lungă oprire anticipată (minute)
+  max_preheat_hours:
+    name: Cea mai lungă preîncălzire (ore)
+    description: Înaintea unui eveniment, camera nu e lăsată să coboare sub temperatura din care preîncălzirea ar dura mai mult de atât.
+  setback_horizon_hours:
+    name: Cu cât timp înainte se aplică minimul (ore)
+    description: Temperatura minimă de așteptare se aplică doar dacă următorul eveniment e în acest interval; altfel doar antiîngheț.
+  late_margin_minutes:
+    name: Toleranță la întârziere (minute)
+    description: Dacă preîncălzirea ajunge la țintă cu mai mult de atât după începutul evenimentului, primești o notificare.
+  weather_entity:
+    name: Entitatea meteo
+    description: De exemplu weather.forecast_vox_domini. Estimările folosesc prognoza pentru intervalul de preîncălzire.
+  notify_service:
+    name: Serviciu de notificare
+    description: De exemplu notify.iphone. Gol = notificări în panoul de notificări din HA.
+network:
+  8080/tcp: Paginile pentru oaspeți deschise din codurile QR

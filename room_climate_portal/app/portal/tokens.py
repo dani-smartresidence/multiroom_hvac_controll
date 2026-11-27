@@ -142,12 +142,12 @@ class TokenStore:
             return self.rotate(room_id)
         code = code.strip()
         if not CUSTOM_RE.match(code):
-            raise CodeError("Use 4 to 64 characters: letters, digits, - or _.")
+            raise CodeError("Folosește între 4 și 64 de caractere: litere, cifre, - sau _.")
         if code.lower() in RESERVED:
-            raise CodeError(f"'{code}' is reserved.")
+            raise CodeError(f"„{code}” e rezervat.")
         for other in room_ids:
             if other != room_id and hmac.compare_digest(self.token_for(other).lower(), code.lower()):
-                raise CodeError(f"Room {other} already uses this code.")
+                raise CodeError(f"Camera {other} folosește deja acest cod.")
         self._custom[room_id] = code
         self._gen[room_id] = self.generation(room_id) + 1
         self._save()
