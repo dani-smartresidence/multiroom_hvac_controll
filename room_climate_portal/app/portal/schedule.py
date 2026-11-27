@@ -72,6 +72,7 @@ def build_events(
                 "end": end.isoformat(),
                 "all_day": all_day,
                 "target": target if target is not None else default_target,
+                "target_set": target is not None,
                 "lead_minutes": None if all_day else lead,
                 "precondition_start": None if all_day else (start - timedelta(minutes=lead)).isoformat(),
             }

@@ -617,6 +617,18 @@ def build_admin_app(portal: Portal) -> web.Application:
             return _json({"error": str(err)}, 400)
         return _json(portal.plant())
 
+    @routes.get("/api/estimates")
+    async def estimates(_request):
+        return _json(portal.estimates())
+
+    @routes.get("/api/estimates/history")
+    async def estimates_history(request):
+        try:
+            limit = max(1, min(int(request.query.get("limit", "100")), 1000))
+        except ValueError:
+            limit = 100
+        return _json(await asyncio.to_thread(portal.datalog.estimates, limit))
+
     @routes.get("/api/sessions")
     async def sessions(request):
         try:
