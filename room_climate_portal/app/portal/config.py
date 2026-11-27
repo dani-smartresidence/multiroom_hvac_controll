@@ -45,6 +45,9 @@ class Options:
     guest_preset_eco: str = "away"
     manual_end: str = "eco"  # eco | room_settings
     restore_after_events: bool = True
+    frost_temp: float = 10.0
+    hysteresis: float = 0.3
+    min_switch_minutes: int = 10
 
     @classmethod
     def load(cls, path: Path) -> "Options":
@@ -96,6 +99,10 @@ class Paths:
     @property
     def pins(self) -> Path:
         return self.data / "pins.json"
+
+    @property
+    def control(self) -> Path:
+        return self.data / "control.json"
 
     @property
     def topology(self) -> Path:

@@ -203,6 +203,43 @@ The **Heating log** tab ends with **Estimates vs what happened**: the last estim
 estimated start, then, once the event is over, when the circuit really opened, the room temperature when the
 event started and when the room reached its target. Nothing switches heating on its own in this version.
 
+## 11. Heating control (switching the circuits)
+
+The **Heating control** section of the Plant tab has one card per boiler, each in one of two modes:
+
+- **Shadow** (default): the add-on decides every minute what it would do with the circuit and shows it
+  ("Would open: preheat for Sala Mare"). Nothing is sent to HA.
+- **Active**: the add-on switches the circuit (preset `Winter` to open, `Summer` to close) and the valves
+  (switches) of the rooms on it.
+
+A circuit opens for:
+
+| Reason | When |
+| --- | --- |
+| Preheat | From the estimated start (section 10) until the event, until the room reaches its target |
+| Event | While an event runs in a room on the circuit: below target − `hysteresis` it opens, above target + `hysteresis` it closes. A room without a sensor heats for the whole event. |
+| Frost | Any heated room below `frost_temp` (default 10 °C), until it is 1 °C warmer |
+
+It closes otherwise, and switches at most once every `min_switch_minutes` (default 10; frost protection
+does not wait). A room valve is open only while its own room needs heat.
+
+### Before you set a boiler to Active
+
+1. **Takeover automations.** Under *Choose automations*, tick every HA automation that switches this
+   circuit. For Sala Plen today: *Sala Mare - termostat Zone1*, *Sala Mare - termostat oprit, Zone1 pe Summer*,
+   *HVAC sala plen - smart start/resume*. *Climate - Winter at night, Summer in the morning* switches all four
+   boilers: taking it over stops its night heating for the boilers left in Shadow as well. Active turns these
+   automations off; Shadow turns them back on.
+2. **Watchdog.** Create one automation from the blueprint `blueprints/automation/heating_watchdog.yaml`
+   (import it from the repository). The add-on publishes `sensor.heating_controller_heartbeat` every minute; if it
+   is older than 15 minutes, the watchdog turns the taken-over automations back on and shows a notification.
+   When the add-on runs again and sees one of its takeover automations on, it sets that boiler back to Shadow:
+   set it to Active again from the Plant tab once all is well.
+3. **Parter valves.** The relays `switch.p0X_…_relay` are also switched by the generic thermostats
+   `climate.p0X_…_thermostat`. Turn those thermostats off before setting Parter to Active, or they will fight.
+
+Every switch the add-on makes is in Recent changes ("Controller: … → Winter (preheat, …)").
+
 ## Security
 
 - Each code is a 128-bit random-looking token (HMAC of a secret in `/data`); room numbers are never in the URL.

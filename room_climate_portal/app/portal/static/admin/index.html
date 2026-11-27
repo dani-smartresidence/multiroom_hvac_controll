@@ -79,6 +79,9 @@
       <option value="print_caption">Print text</option>
       <option value="plant_link">Plant link</option>
       <option value="session_note">Session note</option>
+      <option value="control">Circuit switched</option>
+      <option value="control_mode">Control mode</option>
+      <option value="control_error">Control error</option>
     </select>
   </div>
   <div class="chips" id="log-chips" role="group" aria-label="Filter logs">
@@ -92,7 +95,10 @@
 </main>
 <main id="view-plant" hidden>
   <p class="sub">Which boiler circuit heats each room, its valve and its temperature sensor. Values marked <span class="guess">guess</span> come from the room's Area until you pick one. Nothing here switches heating yet: the links tell the heating log what to record.</p>
-  <h2>Start estimates <span class="th-sub">shown only, nothing is switched</span></h2>
+  <h2>Heating control</h2>
+  <p class="sub" id="ctl-sub"></p>
+  <div class="boilers" id="control"></div>
+  <h2>Start estimates</h2>
   <p class="sub" id="est-sub"></p>
   <div class="scroll">
     <table id="estimates">

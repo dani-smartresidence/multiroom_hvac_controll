@@ -309,6 +309,9 @@ var LOG_Q = "";
         : a.action === "hold_end_eco" ? "Manual heating ended → Eco (" + esc(a.new) + ")"
         : a.action === "restore_default" ? "Back to room settings: " + esc(MODE_LABEL[a.mode] || a.mode) + (a.preset ? " · preset " + esc(presetLabel(a.preset)) : (a.mode !== "off" && a.new != null ? " " + num(a.new) + " °C" : "")) + " (" + esc(String(a.reason).replace("_", " ")) + ")"
         : a.action === "hold_end_kept_for_event" ? "Manual heating ended, kept on for event"
+        : a.action === "control" ? "Controller: " + esc(a.entity) + " → " + esc(a.new) + " (" + esc(String(a.reason || "").replace(/_/g, " ")) + (a.detail ? ", " + esc(a.detail) : "") + ")"
+        : a.action === "control_mode" ? "Heating control " + esc(a.old) + " → " + esc(a.new) + ((a.takeover || []).length ? " · takes over " + esc(a.takeover.join(", ")) : "")
+        : a.action === "control_error" ? "Controller could not switch " + esc(a.entity) + ": " + esc(a.error)
         : a.action === "plant_link" ? "Plant: " + ["boiler", "circuit", "valve", "temperature", "category", "comfort"].filter(function (k) { return k in a; }).map(function (k) { return k + " " + esc(a[k] == null ? "auto" : a[k]); }).join(", ")
         : a.action === "session_note" ? "Heating log note: " + esc(a.note || "removed")
         : a.action === "print_caption" ? "Print text: " + esc(a.new)
@@ -361,6 +364,9 @@ var LOG_Q = "";
           : a.action === "hold_end_eco" ? "Manual heating ended → Eco (" + esc(a.new) + ")"
           : a.action === "restore_default" ? "Back to room settings: " + esc(MODE_LABEL[a.mode] || a.mode) + (a.preset ? " · preset " + esc(presetLabel(a.preset)) : (a.mode !== "off" && a.new != null ? " " + num(a.new) + " °C" : "")) + " (" + esc(String(a.reason).replace("_", " ")) + ")"
           : a.action === "hold_end_kept_for_event" ? "Manual heating ended, kept on for event"
+        : a.action === "control" ? "Controller: " + esc(a.entity) + " → " + esc(a.new) + " (" + esc(String(a.reason || "").replace(/_/g, " ")) + (a.detail ? ", " + esc(a.detail) : "") + ")"
+        : a.action === "control_mode" ? "Heating control " + esc(a.old) + " → " + esc(a.new) + ((a.takeover || []).length ? " · takes over " + esc(a.takeover.join(", ")) : "")
+        : a.action === "control_error" ? "Controller could not switch " + esc(a.entity) + ": " + esc(a.error)
         : a.action === "plant_link" ? "Plant: " + ["boiler", "circuit", "valve", "temperature", "category", "comfort"].filter(function (k) { return k in a; }).map(function (k) { return k + " " + esc(a[k] == null ? "auto" : a[k]); }).join(", ")
         : a.action === "session_note" ? "Heating log note: " + esc(a.note || "removed")
         : a.action === "print_caption" ? "Print text: " + esc(a.new)

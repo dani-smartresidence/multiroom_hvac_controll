@@ -85,6 +85,7 @@ class FakeHA:
             "climate.sala_plen1": boiler_circuit("climate.sala_plen1", 1),
             "climate.parter1": boiler_circuit("climate.parter1", 1, "Parter"),
             "switch.camera_101_relay": {"entity_id": "switch.camera_101_relay", "state": "off", "attributes": {}},
+            "automation.old_heating": {"entity_id": "automation.old_heating", "state": "on", "attributes": {"friendly_name": "Old heating"}},
             "sensor.camera_101_temperature": {"entity_id": "sensor.camera_101_temperature", "state": "17.0", "attributes": {"device_class": "temperature", "unit_of_measurement": "°C"}},
             "calendar.camera_101": {"entity_id": "calendar.camera_101", "state": "off", "attributes": {}},
         }
@@ -216,6 +217,13 @@ class FakeHA:
                 st = self.states[target]
                 await ok({"context": {}})
                 await self.set_state(target, data["hvac_mode"], st["attributes"])
+                return
+            if dom in ("switch", "automation") and svc in ("turn_on", "turn_off"):
+                st = self.states.get(target)
+                if not st:
+                    return await err("not_found", f"{target} not found")
+                await ok({"context": {}})
+                await self.set_state(target, "on" if svc == "turn_on" else "off", st["attributes"])
                 return
             return await err("not_found", f"Service {dom}.{svc} not found")
         return await err("unknown_command", typ)

@@ -1,0 +1,59 @@
+blueprint:
+  name: Heating controller watchdog (Room Climate Portal)
+  description: >-
+    If the Room Climate Portal add-on stops publishing its heartbeat while it switches boiler circuits,
+    turn the automations it took over back on, so your own heating automations run the building again,
+    and show a notification. Create one automation from this blueprint; it needs no list of automations,
+    it reads them from the heartbeat.
+  domain: automation
+  source_url: https://github.com/dani-smartresidence/multiroom_hvac_controll/blob/main/blueprints/automation/heating_watchdog.yaml
+  input:
+    heartbeat:
+      name: Heartbeat sensor
+      default: sensor.heating_controller_heartbeat
+      selector:
+        entity:
+          filter:
+            - domain: sensor
+    stale_minutes:
+      name: Minutes without a heartbeat
+      default: 15
+      selector:
+        number:
+          min: 5
+          max: 120
+          unit_of_measurement: min
+
+mode: single
+
+triggers:
+  - trigger: time_pattern
+    minutes: "/5"
+
+variables:
+  hb: !input heartbeat
+  stale: !input stale_minutes
+  autos: "{{ state_attr(hb, 'takeover_automations') or [] }}"
+  last: >-
+    {% set s = states[hb] %}
+    {% set t = as_datetime(s.state, none) if s and s.state not in ['unknown', 'unavailable'] else none %}
+    {{ (t or (s.last_changed if s else now())) | string }}
+
+conditions:
+  - condition: template
+    value_template: "{{ autos | count > 0 and as_datetime(last) < now() - timedelta(minutes=stale | int) }}"
+  - condition: template
+    value_template: "{{ expand(autos) | selectattr('state', 'eq', 'off') | list | count > 0 }}"
+
+actions:
+  - action: automation.turn_on
+    target:
+      entity_id: "{{ autos }}"
+  - action: persistent_notification.create
+    data:
+      notification_id: heating_watchdog
+      title: Heating controller stopped
+      message: >-
+        No heartbeat from the Room Climate Portal add-on since {{ as_timestamp(last) | timestamp_custom('%H:%M') }}.
+        These automations were turned back on: {{ autos | join(', ') }}.
+        Check the add-on, then set its boilers to Active again from the Plant tab.

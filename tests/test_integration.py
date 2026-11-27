@@ -1,6 +1,7 @@
 """End to end: the portal against the fake HA, through the real HTTP apps."""
 import asyncio
 import json
+import time
 
 import aiohttp
 import pytest
@@ -639,3 +640,48 @@ async def test_start_estimates(env):
     await portal.log_tick()
     hist = await (await admin.get("/api/estimates/history")).json()
     assert hist[0]["circuit"] == "climate.sala_plen1" and hist[0]["lead_min"] == e["lead_min"]
+
+
+async def test_control_shadow_then_active(env):
+    fake, portal, _, admin = env
+    # camera_204's event starts in 29 min: with default model values its preheat window is open now.
+    await admin.post("/api/plant/rooms/camera_204", json={"circuit": "climate.sala_plen1", "temperature": "sensor.camera_101_temperature",
+                                                          "valve": "switch.camera_101_relay"})
+    await portal.log_tick()
+    view = await (await admin.get("/api/control")).json()
+    sala = next(b for b in view["boilers"] if b["id"] == "sala_plen")
+    d = sala["circuits"][0]["decision"]
+    assert sala["mode"] == "shadow" and d["open"] and d["reason"] == "preheat" and d["detail"] == "camera_204"
+    switched = [c for c in fake.service_calls if c["domain"] in ("climate", "switch", "automation")]
+    assert switched == []  # shadow: nothing sent
+    assert fake.published["sensor.heating_controller_heartbeat"]["attributes"]["active_boilers"] == []
+
+    r = await admin.post("/api/control/boilers/sala_plen", json={"mode": "active", "takeover": ["automation.old_heating"]})
+    assert r.status == 200
+    await asyncio.sleep(0.2)
+    assert fake.states["automation.old_heating"]["state"] == "off"
+    await portal.log_tick()
+    await asyncio.sleep(0.2)
+    assert fake.states["climate.sala_plen1"]["attributes"]["preset_mode"] == "Winter"
+    assert fake.states["switch.camera_101_relay"]["state"] == "on"
+    hb = fake.published["sensor.heating_controller_heartbeat"]["attributes"]
+    assert hb["active_boilers"] == ["sala_plen"] and hb["takeover_automations"] == ["automation.old_heating"]
+    assert any(a["action"] == "control" and a["entity"] == "climate.sala_plen1" for a in portal.audit.tail(20))
+
+    # Warm enough: wants to close, but one switch per 10 minutes.
+    await fake.set_state("sensor.camera_101_temperature", "23.0", {"device_class": "temperature"})
+    await asyncio.sleep(0.1)
+    await portal.log_tick()
+    d = portal.decisions["climate.sala_plen1"]
+    assert not d.open and d.held and fake.states["climate.sala_plen1"]["attributes"]["preset_mode"] == "Winter"
+    await portal.log_tick(int(time.time()) + 11 * 60)
+    await asyncio.sleep(0.2)
+    assert fake.states["climate.sala_plen1"]["attributes"]["preset_mode"] == "Summer"
+
+    # The watchdog turns the old automation back on: the add-on steps back to shadow.
+    await fake.set_state("automation.old_heating", "on", {"friendly_name": "Old heating"})
+    await asyncio.sleep(0.1)
+    await portal.log_tick()
+    assert portal.control.boiler("sala_plen")["mode"] == "shadow"
+    assert (await admin.post("/api/control/boilers/nope", json={"mode": "active"})).status == 404
+    assert (await admin.post("/api/control/boilers/sala_plen", json={"mode": "maybe"})).status == 400
