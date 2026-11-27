@@ -207,3 +207,12 @@ select.mode{margin-top:6px;font:inherit;font-size:12px;padding:5px 8px;border-ra
 #sessions .note input{width:140px}
 .kind-heat{color:var(--accent);font-weight:600}
 .kind-cool{color:var(--muted);font-weight:600}
+#estimates td,#est-history td{white-space:nowrap}
+#estimates td.calc{white-space:normal;min-width:260px;font-size:12px}
+.est-start{font-size:18px;font-weight:700;font-variant-numeric:tabular-nums}
+.conf{display:inline-block;font-size:11px;font-weight:600;padding:1px 8px;border-radius:999px;border:1px solid var(--line)}
+.conf-none,.conf-low{color:var(--warn);background:var(--warn-bg);border-color:transparent}
+.conf-medium{color:var(--accent)}
+.conf-high{color:var(--ok)}
+.late{color:var(--warn);font-weight:600}
+.good{color:var(--ok);font-weight:600}
