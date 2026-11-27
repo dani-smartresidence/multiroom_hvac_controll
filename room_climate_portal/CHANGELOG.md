@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.13.0
+- **Start estimates** at the top of the Plant tab, one row per circuit. Each row shows the room that needs heat
+  first, its next event and the estimated start, with the calculation spelled out: dead time, heating rate, share
+  of the boiler when other circuits heat at the same time, and margin. It also shows the room temperature now and
+  predicted at the start, how many runs the estimate rests on, and the fixed lead time used today for comparison.
+  Rooms with events but no circuit are listed.
+- The model is learned from the heat runs (dead time and rate per room, rate scaled to one circuit alone on its
+  boiler, following the outdoor temperature once there is enough spread) and the cool runs (τ). Without runs it
+  uses 40 min and 1.5 °C/h.
+- **Estimates vs what happened** on the Heating log tab: the last estimate before each event's estimated start,
+  then when the circuit really opened, the room temperature at the event start and when the target was reached.
+  Stored in the `estimates` table of `/data/heating.db`.
+- Admin API: `GET /api/estimates`, `GET /api/estimates/history`.
+- Shown only: preconditioning still uses the fixed lead time.
+
 ## 0.12.0
 - **Plant tab** on the admin page: the boilers with their circuits live (open/closed, preset, heat request), and a
   table linking each room to its boiler circuit, valve and temperature sensor, with a heating choice (calendar events,
