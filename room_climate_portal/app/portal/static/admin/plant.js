@@ -61,14 +61,16 @@
   var CONTROL = null, CTL_OPEN = {};
   var WHY = {
     preheat: "preheat for", preheat_warm: "warm before the event in", event: "event in", event_no_sensor: "event (no sensor) in",
-    frost: "frost protection in", idle: "nothing to heat"
+    frost: "frost protection in", setback: "keeping the setback floor in", coast: "coasting to the end of the event in",
+    test_a: "test A (heating) in", test_b: "test B (cooling) in", idle: "nothing to heat"
   };
   function loadControl() {
     return fetch("api/control").then(function (r) { return r.json(); }).then(function (d) {
       CONTROL = d;
       var s = d.settings;
       $("#ctl-sub").innerHTML = "Hysteresis ±" + num(s.hysteresis) + " °C · frost protection below " + num(s.frost_temp) + " °C · at most one switch every " +
-        s.min_switch_minutes + " min. <b>Shadow</b> shows what the add-on would do. <b>Active</b> switches the circuit and turns off the automations it takes over; the watchdog blueprint turns them back on if the add-on stops (<code>" + esc(d.heartbeat) + "</code>).";
+        s.min_switch_minutes + " min · stops early to lose at most " + num(s.coast_drop) + " °C (max " + s.max_coast_minutes + " min) · setback floor keeps preheating under " +
+        num(s.max_preheat_hours) + " h for events in the next " + num(s.setback_horizon_hours, 0) + " h. <b>Shadow</b> shows what the add-on would do. <b>Active</b> switches the circuit and turns off the automations it takes over; the watchdog blueprint turns them back on if the add-on stops (<code>" + esc(d.heartbeat) + "</code>).";
       var focused = document.activeElement && document.activeElement.closest && document.activeElement.closest("#control");
       if (!focused) $("#control").innerHTML = d.boilers.map(controlCard).join("");
     });
@@ -80,8 +82,15 @@
     var verb = d.open ? (isOpen ? "Open" : active ? "Opening" : "Would open") : (isOpen ? (active ? "Closing" : "Would close") : "Closed");
     var why = WHY[d.reason] || d.reason;
     var who = d.detail ? " " + esc(d.detail.split(", ").map(roomName).join(", ")) : "";
-    return '<b class="' + (d.open ? "kind-heat" : "kind-cool") + '">' + verb + "</b>: " + esc(why) + who +
-      (d.held ? ' <span class="late">(waiting: one switch per ' + CONTROL.settings.min_switch_minutes + " min)</span>" : "");
+    var p = d.progress;
+    var prog = !p ? "" : p.status === "late" ? ' · <span class="late">late: target around ' + hhmm(p.arrival) + "</span>"
+      : p.status === "on_track" ? ' · <span class="good">on track, target around ' + hhmm(p.arrival) + "</span>" : "";
+    var extra = d.rooms.filter(function (r) { return r.floor != null || r.coast_min; }).map(function (r) {
+      return esc(roomName(r.room)) + (r.floor != null ? " floor " + num(r.floor) + " °C" : "") + (r.coast_min ? " · stops " + Math.round(r.coast_min) + " min before the end" : "");
+    }).join("; ");
+    return '<b class="' + (d.open ? "kind-heat" : "kind-cool") + '">' + verb + "</b>: " + esc(why) + who + prog +
+      (d.held ? ' <span class="late">(waiting: one switch per ' + CONTROL.settings.min_switch_minutes + " min)</span>" : "") +
+      (extra ? '<br><span class="muted">' + extra + "</span>" : "");
   }
   function controlCard(b) {
     var active = b.mode === "active";
@@ -99,11 +108,29 @@
       b.circuits.map(function (c) {
         return '<div class="circ"><span class="dot ' + (c.preset_mode === "Winter" ? "on" : "") + '"></span><div><b>' + esc(c.name) + "</b> " +
           '<span class="mono muted">' + esc(c.entity_id) + "</span></div><small>" + decisionText(c, active) + "</small>" +
-          (c.last_switch ? "<small>Last switched by the add-on " + esc(day(c.last_switch)) + "</small>" : "") + "</div>";
+          (c.last_switch ? "<small>Last switched by the add-on " + esc(day(c.last_switch)) + "</small>" : "") +
+          "<small>" + testText(c) + ' <button type="button" class="small" data-chart="' + esc(c.entity_id) + '">Last 24 h</button></small>' +
+          '<div class="chart-box" data-chart-box="' + esc(c.entity_id) + '"></div></div>';
       }).join("") +
       '<div class="circ"><span></span><div><small>Takes over: ' + take + "</small>" +
       '<details' + (CTL_OPEN[b.id] ? " open" : "") + '><summary>Choose automations</summary><input type="search" class="auto-q" placeholder="Filter automations" aria-label="Filter automations">' +
       '<div class="autos">' + boxes + '</div><button type="button" class="small primary" data-save-takeover>Save</button></details></div></div></section>';
+  }
+  function testText(c) {
+    var e = c.experiment;
+    if (e) {
+      var phase = e.phase === "A" ? "heating since " + hhmm(e.a_start) : e.phase === "B" ? "cooling since " + hhmm(e.b_start) : "starts " + day(e.start);
+      return "Test (" + esc(roomName(e.room)) + "): " + esc(phase) + ' <button type="button" class="small" data-test-cancel="' + esc(c.entity_id) + '">Cancel test</button>';
+    }
+    var t = new Date(); t.setHours(22, 0, 0, 0);
+    if (t < new Date()) t.setDate(t.getDate() + 1);
+    var local = new Date(t.getTime() - t.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+    return '<details class="test"><summary>Run a test (A then B)</summary>' +
+      '<label>Start <input type="datetime-local" data-test-start value="' + local + '"></label>' +
+      '<label>Heat until +<input type="number" step="0.5" min="0.5" max="10" value="3" data-test-rise> °C</label>' +
+      '<label>or at most <input type="number" step="0.5" min="0.5" max="12" value="4" data-test-max> h</label>' +
+      '<label>then closed <input type="number" step="1" min="0" max="24" value="8" data-test-cool> h</label>' +
+      '<button type="button" class="small primary" data-test-run="' + esc(c.entity_id) + '">Schedule</button></details>';
   }
   $("#control").addEventListener("toggle", function (ev) {
     var card = ev.target.closest("[data-boiler]");
@@ -133,6 +160,33 @@
       }).catch(function (e) { flash(e.message); });
       return;
     }
+    var chartBtn = ev.target.closest("[data-chart]");
+    if (chartBtn) {
+      var cid = chartBtn.getAttribute("data-chart");
+      var box = card.querySelector('[data-chart-box="' + cid + '"]');
+      if (box.innerHTML) { box.innerHTML = ""; return; }
+      var circ = b.circuits.filter(function (x) { return x.entity_id === cid; })[0];
+      var room = (circ.rooms.filter(function (r) { return r.sensor; })[0] || {}).room;
+      var now = Date.now() / 1000;
+      chart(box, cid, room, now - 86400, now);
+      return;
+    }
+    var run = ev.target.closest("[data-test-run]");
+    if (run) {
+      var form = run.closest("details");
+      var start = new Date(form.querySelector("[data-test-start]").value).getTime() / 1000;
+      post("api/control/experiments/" + encodeURIComponent(run.getAttribute("data-test-run")), {
+        start: start, rise: form.querySelector("[data-test-rise]").value, max_hours: form.querySelector("[data-test-max]").value,
+        cool_hours: form.querySelector("[data-test-cool]").value
+      }).then(function () { flash("Test scheduled"); loadControl(); }).catch(function (e) { flash(e.message); });
+      return;
+    }
+    var cancel = ev.target.closest("[data-test-cancel]");
+    if (cancel) {
+      post("api/control/experiments/" + encodeURIComponent(cancel.getAttribute("data-test-cancel")), { cancel: true })
+        .then(function () { flash("Test cancelled"); loadControl(); }).catch(function (e) { flash(e.message); });
+      return;
+    }
     if (ev.target.closest("[data-save-takeover]")) {
       var list = [];
       card.querySelectorAll("input[data-auto]:checked").forEach(function (i) { list.push(i.getAttribute("data-auto")); });
@@ -152,8 +206,12 @@
   function loadEstimates() {
     return fetch("api/estimates").then(function (r) { return r.json(); }).then(function (d) {
       var rows = d.circuits.filter(function (c) { return c.estimate; });
-      $("#est-sub").textContent = "Outdoor " + (d.outdoor == null ? "unknown (set outdoor_sensor)" : num(d.outdoor) + " °C") +
-        " · margin of 15 min included · updated " + hhmm(d.now);
+      $("#est-sub").innerHTML = "Outdoor " + (d.outdoor == null ? "unknown (set outdoor_sensor)" : num(d.outdoor) + " °C") +
+        (d.forecast ? " · estimates use the forecast for each preheat window" : " · no forecast (set weather_entity)") +
+        " · margin of 15 min included · updated " + hhmm(d.now) +
+        '<br>Room pages and precondition sensors use: <span class="mode-btns" id="lead-mode">' +
+        '<button type="button" class="small' + (d.lead_mode === "estimated" ? "" : " on") + '" data-lead="fixed">Fixed lead time</button>' +
+        '<button type="button" class="small' + (d.lead_mode === "estimated" ? " on" : "") + '" data-lead="estimated">Estimated start</button></span>';
       $("#est-empty").hidden = rows.length > 0;
       $("#estimates").hidden = rows.length === 0;
       $("#estimates tbody").innerHTML = rows.map(estimateRow).join("");
@@ -164,6 +222,14 @@
       }).join(" · ") : "";
     });
   }
+  $("#est-sub").addEventListener("click", function (ev) {
+    var b = ev.target.closest("[data-lead]");
+    if (!b) return;
+    post("api/lead_mode", { mode: b.getAttribute("data-lead") }).then(function () {
+      flash(b.getAttribute("data-lead") === "estimated" ? "Room pages now use the estimated start" : "Room pages now use the fixed lead time");
+      loadEstimates();
+    }).catch(function (e) { flash(e.message); });
+  });
   function estimateRow(c) {
     var e = c.estimate;
     var status = e.status === "heat_now" ? '<div class="late">should be heating now' + (c.open_now ? "" : ", circuit is closed") + "</div>"
@@ -274,7 +340,8 @@
           '<td class="mono">' + (s.rate_c_per_h == null ? "–" : num(s.rate_c_per_h, 2) + " °C/h") + "</td>" +
           "<td>" + minutes(s.reached_min) + "</td>" +
           '<td class="mono">' + (s.tau_h == null ? "–" : num(s.tau_h) + " h") + "</td>" +
-          '<td class="note"><input type="text" maxlength="200" value="' + esc(s.note || "") + '" data-session="' + s.id + '" aria-label="Note"> <button type="button" class="small" data-save="' + s.id + '">Save</button></td></tr>';
+          '<td class="note"><input type="text" maxlength="200" value="' + esc(s.note || "") + '" data-session="' + s.id + '" aria-label="Note"> <button type="button" class="small" data-save="' + s.id + '">Save</button>' +
+          ' <button type="button" class="small" data-sess-chart="' + s.id + '" data-circuit="' + esc(s.circuit) + '" data-room="' + esc(s.room || "") + '" data-from="' + s.start + '" data-to="' + s.end + '">Chart</button></td></tr>';
       }).join("");
     });
   }
@@ -298,6 +365,16 @@
   $("#sess-circuit").addEventListener("change", loadSessions);
   $("#sess-reload").addEventListener("click", function () { loadSessions(); loadHistory(); });
   $("#sessions").addEventListener("click", function (ev) {
+    var cb = ev.target.closest("button[data-sess-chart]");
+    if (cb) {
+      var tr = cb.closest("tr");
+      if (tr.nextElementSibling && tr.nextElementSibling.classList.contains("chart-row")) { tr.nextElementSibling.remove(); return; }
+      tr.insertAdjacentHTML("afterend", '<tr class="chart-row"><td colspan="13"><div class="chart-box"></div></td></tr>');
+      var from = +cb.getAttribute("data-from"), to = +cb.getAttribute("data-to");
+      chart(tr.nextElementSibling.querySelector(".chart-box"), cb.getAttribute("data-circuit"), cb.getAttribute("data-room"),
+        from - 3600, Math.max(to + 3600, from + 7200));
+      return;
+    }
     var b = ev.target.closest("button[data-save]");
     if (!b) return;
     var id = b.getAttribute("data-save");
@@ -305,6 +382,53 @@
     post("api/sessions/" + id + "/note", { note: input.value }).then(function () { flash("Note saved"); })
       .catch(function (e) { flash(e.message); });
   });
+
+  // ------------------------------------------------------------ chart
+  // Room temperature and outdoor temperature as lines, the circuit's open periods as shaded bands.
+  function series(key, from, to) {
+    return fetch("api/samples?key=" + encodeURIComponent(key) + "&from=" + Math.floor(from) + "&to=" + Math.ceil(to))
+      .then(function (r) { return r.json(); });
+  }
+  function chart(box, circuit, room, from, to) {
+    box.innerHTML = '<p class="muted">Loading…</p>';
+    Promise.all([room ? series("room:" + room + ":temp", from, to) : Promise.resolve([]), series("outdoor", from, to),
+      series("circuit:" + circuit + ":on", from, to)]).then(function (res) {
+      var temp = res[0], out = res[1], on = res[2];
+      if (!temp.length && !out.length && !on.length) { box.innerHTML = '<p class="muted">No data in this period yet.</p>'; return; }
+      var W = 720, H = 220, L = 40, R = 12, T = 12, B = 26;
+      var vals = temp.concat(out).map(function (p) { return p[1]; });
+      var lo = Math.floor(Math.min.apply(null, vals.length ? vals : [0]) - 1), hi = Math.ceil(Math.max.apply(null, vals.length ? vals : [20]) + 1);
+      function x(t) { return L + (Math.max(from, Math.min(to, t)) - from) / (to - from) * (W - L - R); }
+      function y(v) { return T + (hi - v) / (hi - lo) * (H - T - B); }
+      function path(pts) {
+        var d = "", last = null;
+        pts.forEach(function (p) {
+          var px = x(p[0]).toFixed(1), py = y(p[1]).toFixed(1);
+          d += (d ? (last != null ? "L" + px + " " + last + "L" : "L") : "M") + px + " " + py;  // step-hold
+          last = py;
+        });
+        if (pts.length) d += "L" + x(to).toFixed(1) + " " + last;
+        return d;
+      }
+      var bands = "";
+      on.forEach(function (p, i) {
+        if (p[1] !== 1) return;
+        var end = i + 1 < on.length ? on[i + 1][0] : to;
+        bands += '<rect class="c-on" x="' + x(p[0]).toFixed(1) + '" y="' + T + '" width="' + Math.max(1, x(end) - x(p[0])).toFixed(1) + '" height="' + (H - T - B) + '"/>';
+      });
+      var grid = "", step = Math.max(1, Math.round((hi - lo) / 5));
+      for (var v = lo; v <= hi; v += step) grid += '<line class="c-grid" x1="' + L + '" x2="' + (W - R) + '" y1="' + y(v) + '" y2="' + y(v) + '"/><text class="c-lbl" x="' + (L - 6) + '" y="' + (y(v) + 4) + '" text-anchor="end">' + v + "°</text>";
+      var hours = (to - from) / 3600, every = hours > 30 ? 6 : hours > 12 ? 3 : 1, ticks = "";
+      var t0 = Math.ceil(from / 3600) * 3600;
+      for (var t = t0; t <= to; t += 3600) {
+        if (((t / 3600) % every) !== 0) continue;
+        ticks += '<text class="c-lbl" x="' + x(t) + '" y="' + (H - 8) + '" text-anchor="middle">' + hhmm(t) + "</text>";
+      }
+      box.innerHTML = '<svg viewBox="0 0 ' + W + " " + H + '" class="chart" role="img" aria-label="Temperatures and circuit">' + bands + grid + ticks +
+        '<path class="c-out" d="' + path(out) + '"/><path class="c-room" d="' + path(temp) + '"/></svg>' +
+        '<div class="legend"><span><i class="l-room"></i>' + esc(room ? roomName(room) : "no room") + '</span><span><i class="l-out"></i>outdoor</span><span><i class="l-on"></i>circuit open</span></div>';
+    }).catch(function (e) { box.innerHTML = '<p class="late">' + esc(e.message) + "</p>"; });
+  }
 
   fetch("api/status").then(function (r) { return r.json(); }).then(function (s) { TZ = s.time_zone || undefined; }).catch(function () {});
   show();
