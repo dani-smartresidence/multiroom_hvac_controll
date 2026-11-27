@@ -617,6 +617,26 @@ def build_admin_app(portal: Portal) -> web.Application:
             return _json({"error": str(err)}, 400)
         return _json(portal.plant())
 
+    @routes.get("/api/control")
+    async def control(_request):
+        return _json(portal.control_view())
+
+    @routes.post("/api/control/boilers/{boiler_id}")
+    async def control_boiler(request):
+        data = await admin_body(request)
+        takeover = data.get("takeover")
+        if takeover is not None and not isinstance(takeover, list):
+            return _json({"error": "takeover must be a list of automations"}, 400)
+        try:
+            await portal.set_boiler_control(request.match_info["boiler_id"], data.get("mode"), takeover)
+        except KeyError:
+            raise web.HTTPNotFound()
+        except ValueError as err:
+            return _json({"error": str(err)}, 400)
+        except HAError as err:
+            return _json({"error": f"Home Assistant: {err.message}"}, 502)
+        return _json(portal.control_view())
+
     @routes.get("/api/estimates")
     async def estimates(_request):
         return _json(portal.estimates())

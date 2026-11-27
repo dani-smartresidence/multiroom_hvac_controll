@@ -10,6 +10,9 @@ from zoneinfo import ZoneInfo
 
 from .audit import AuditLog
 from .config import Options, Paths
+from .controller import (
+    CLOSED_PRESET, HEARTBEAT_ENTITY, OPEN_PRESET, ControlStore, Decision, decide_circuit, room_need,
+)
 from .datalog import DataLog
 from .ha import HAClient, HAError
 from .pins import PinStore
@@ -100,6 +103,8 @@ class Portal:
         self.sessions = SessionTracker(self.datalog, self.topology, options.default_target_temp)
         self._plant_index: dict[str, list[tuple[str, str | None]]] = {}  # entity -> [(kind, room/circuit)]
         self.models = fit_models(self.datalog.sessions(limit=MODEL_SESSIONS))
+        self.control = ControlStore(paths.control)
+        self.decisions: dict[str, Decision] = {}
         ha.on_connect = self._on_connect
         ha.on_disconnect = self._on_disconnect
 
@@ -269,8 +274,130 @@ class Portal:
         if ids or not any(self.models):
             rows = await asyncio.to_thread(self.datalog.sessions, MODEL_SESSIONS)
             self.models = fit_models(rows)
-        await asyncio.to_thread(self._save_estimates, self.estimates(now), now)
+        estimates = self.estimates(now)
+        await asyncio.to_thread(self._save_estimates, estimates, now)
+        await self.control_tick(estimates, now)
         return ids
+
+    # ------------------------------------------------------------------ control
+    async def control_tick(self, estimates: dict, now: int) -> None:
+        """Decide every circuit; send the decision for boilers in active mode."""
+        now_dt = datetime.fromtimestamp(now, self.tz)
+        opts = self.options
+        by_circuit = {c["circuit"]: c["estimate"] for c in estimates["circuits"]}
+        for boiler in self.topology.boilers:
+            cfg = self.control.boiler(boiler.id)
+            active = cfg["mode"] == "active"
+            back_on = [a for a in cfg["takeover"] if (self.states.get(a) or {}).get("state") == "on"]
+            if active and back_on:
+                # The watchdog or someone else turned a taken-over automation back on: never fight it.
+                self.control.set_boiler(boiler.id, "shadow")
+                self.audit.write(room=boiler.id, action="control_mode", client="controller", old="active", new="shadow",
+                                 takeover=cfg["takeover"], reason="automation_on", detail=", ".join(back_on))
+                active = False
+            for circuit in boiler.circuits:
+                st = self.states.get(circuit)
+                attrs = (st or {}).get("attributes") or {}
+                available = bool(st) and st.get("state") not in ("unavailable", "unknown")
+                is_open = attrs.get("preset_mode") == OPEN_PRESET
+                links = self.topology.rooms_on_circuit(circuit)
+                needs = [
+                    room_need(l, room_temperature(l, self.states), self.schedules.get(l.room_id, []), now_dt,
+                              is_open=is_open, hysteresis=opts.hysteresis, frost_temp=opts.frost_temp)
+                    for l in links
+                ]
+                est = by_circuit.get(circuit)
+                pre_t = room_temperature(self.topology.link(est["room"]), self.states) if est else None
+                d = decide_circuit(circuit, boiler.id, needs, est, now, is_open=is_open,
+                                   hysteresis=opts.hysteresis, preheat_temp=pre_t)
+                if d.open != is_open:
+                    last = self.control.last_switch(circuit)
+                    if last and now - last < opts.min_switch_minutes * 60 and d.reason != "frost":
+                        d.held = True
+                    elif active and available:
+                        await self._command(circuit, "climate", "set_preset_mode",
+                                            {"preset_mode": OPEN_PRESET if d.open else CLOSED_PRESET}, d, now)
+                if active:
+                    heat_rooms = {n.room for n in needs if n.heat}
+                    if d.reason == "preheat":
+                        heat_rooms.add(est["room"])
+                    for l in links:
+                        if not l.valve or l.valve not in self.states:
+                            continue
+                        want = l.room_id in heat_rooms
+                        if (self.states[l.valve].get("state") == "on") != want:
+                            await self._command(l.valve, "switch", "turn_on" if want else "turn_off", {}, d, now)
+                self.decisions[circuit] = d
+        await self._heartbeat(now)
+
+    async def _command(self, entity_id: str, domain: str, service: str, data: dict, d: Decision, now: int) -> None:
+        try:
+            await self.ha.call_service(domain, service, data, entity_id=entity_id)
+        except HAError as err:
+            _LOGGER.warning("Cannot %s.%s %s: %s", domain, service, entity_id, err)
+            self.audit.write(action="control_error", client="controller", entity=entity_id, new=service, error=str(err))
+            return
+        if domain == "climate":
+            self.control.switched(entity_id, now)
+        self.audit.write(action="control", client="controller", entity=entity_id, new=data.get("preset_mode") or service,
+                         reason=d.reason, detail=d.detail)
+
+    async def _heartbeat(self, now: int) -> None:
+        active = [b.id for b in self.topology.boilers if self.control.boiler(b.id)["mode"] == "active"]
+        try:
+            await self.ha.set_state(
+                HEARTBEAT_ENTITY,
+                datetime.fromtimestamp(now, self.tz).isoformat(),
+                {"device_class": "timestamp", "friendly_name": "Heating controller heartbeat", "icon": "mdi:heart-pulse",
+                 "active_boilers": active,
+                 "takeover_automations": sorted({a for b in self.topology.boilers for a in self.control.boiler(b.id)["takeover"]
+                                                 if self.control.boiler(b.id)["mode"] == "active"})},
+            )
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.warning("Cannot publish %s: %s", HEARTBEAT_ENTITY, err)
+
+    async def set_boiler_control(self, boiler_id: str, mode: str | None, takeover: list[str] | None, client: str = "admin") -> dict:
+        """Change a boiler's mode or takeover automations. Active turns the takeover automations off, shadow back on."""
+        if not self.topology.boiler(boiler_id):
+            raise KeyError(boiler_id)
+        before = self.control.boiler(boiler_id)
+        after = self.control.set_boiler(boiler_id, mode, takeover)
+        if after["mode"] != before["mode"] or (after["mode"] == "active" and after["takeover"] != before["takeover"]):
+            if after["mode"] == "active":
+                off = after["takeover"]
+                on = [a for a in before["takeover"] if a not in after["takeover"]] if before["mode"] == "active" else []
+            else:
+                off, on = [], before["takeover"] if before["mode"] == "active" else []
+            for service, autos in (("turn_off", off), ("turn_on", on)):
+                for a in autos:
+                    try:
+                        await self.ha.call_service("automation", service, {}, entity_id=a)
+                    except HAError as err:
+                        _LOGGER.warning("Cannot %s %s: %s", service, a, err)
+        self.audit.write(room=boiler_id, action="control_mode", client=client, old=before["mode"], new=after["mode"],
+                         takeover=after["takeover"])
+        return after
+
+    def control_view(self) -> dict:
+        boilers = []
+        for b in self.topology.boilers:
+            cfg = self.control.boiler(b.id)
+            circuits = []
+            for c in b.circuits:
+                attrs = (self.states.get(c) or {}).get("attributes") or {}
+                d = self.decisions.get(c)
+                circuits.append({"entity_id": c, "name": self._entity_names.get(c) or attrs.get("friendly_name") or c,
+                                 "preset_mode": attrs.get("preset_mode"), "last_switch": self.control.last_switch(c),
+                                 "decision": d.as_dict() if d else None})
+            boilers.append({"id": b.id, "name": b.name, **cfg, "circuits": circuits})
+        automations = sorted(
+            ({"entity_id": e, "name": (st.get("attributes") or {}).get("friendly_name") or e, "state": st.get("state")}
+             for e, st in self.states.items() if e.startswith("automation.")),
+            key=lambda a: a["name"].lower(),
+        )
+        o = self.options
+        return {"boilers": boilers, "automations": automations, "heartbeat": HEARTBEAT_ENTITY,
+                "settings": {"frost_temp": o.frost_temp, "hysteresis": o.hysteresis, "min_switch_minutes": o.min_switch_minutes}}
 
     def _save_estimates(self, data: dict, now: int) -> None:
         for c in data["circuits"]:
