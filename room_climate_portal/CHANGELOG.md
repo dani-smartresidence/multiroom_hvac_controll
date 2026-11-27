@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.12.0
+- **Plant tab** on the admin page: the boilers with their circuits live (open/closed, preset, heat request), and a
+  table linking each room to its boiler circuit, valve and temperature sensor, with a heating choice (calendar events,
+  frost protection only, not heated) and a comfort temperature. Unset values are guessed from the room's Area.
+  Saved in `/data/topology.json`; changes appear in Recent changes.
+- **Heating log**: room and outdoor temperatures, circuits and valves are recorded in `/data/heating.db` (SQLite,
+  on change and at least every 10 minutes, kept 120 days, then as 15-minute averages). Each heating run of a circuit
+  is measured per room (dead time, heating rate, time to comfort, open circuits on the boiler, outdoor temperature),
+  and each cooling run of 2 h or more gives the room's time constant τ. The **Heating log** tab lists the runs and
+  takes a note per run.
+- Admin API: `GET /api/plant`, `POST /api/plant/rooms/{room}`, `GET /api/sessions`, `POST /api/sessions/{id}/note`,
+  `GET /api/samples`.
+- No change to preconditioning, holds or the room pages.
+
 ## 0.11.0
 - **Lead time 120 min for all rooms** out of the box. New admin button **Lead time: all rooms** sets one value for
   every room (it replaces any single-room value); the per-room field still overrides it. Lead-time helpers in HA and

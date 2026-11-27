@@ -150,6 +150,30 @@ Open **Room QR** in the HA sidebar. It lists every room with what was found (and
 the live temperatures, the next event and its QR code. **Print all QR codes** gives an A4 sheet;
 **New code** replaces one room's code (the old sticker stops working immediately, open pages close).
 
+## 9. Heating plant and heating log
+
+The **Plant** tab of the admin page shows each boiler with its three circuits (open or closed, preset,
+heat request) and a table that links every room to the circuit that heats it, its valve (a switch on the
+manifold, if it has one) and its temperature sensor. Values marked *guess* come from the room's Area: a
+`*_relay` switch becomes the valve, the Area's temperature sensor the sensor. Pick a value to keep it,
+pick "–" to go back to the guess. **Heating** sets whether a room follows calendar events, only needs frost
+protection, or is not heated at all.
+
+Boilers are created on first start from the circuits found in HA and saved in `/data/topology.json`.
+A circuit counts as open while its preset is `Winter` or its `heat_request` is above 0.
+
+The add-on records the room temperatures, the outdoor temperature (`outdoor_sensor`), every circuit and
+every valve in `/data/heating.db` (SQLite): a row per change, at least one every 10 minutes. Rows older
+than 120 days are averaged to 15 minutes. The **Heating log** tab lists the runs measured from it:
+
+| Run | What is measured per room |
+| --- | --- |
+| Heat (circuit opens until it closes, at most 8 h) | start temperature, dead time until +0.2 °C, heating rate in °C/h, time to the comfort temperature, outdoor temperature, how many circuits of the boiler were open |
+| Cool (circuit closed for 2 h or more) | time constant τ in hours: how fast the room loses heat to the outside |
+
+Add a note to a run to mark a test, for example "Test A, one circuit". Nothing in this version switches
+heating on or off: preconditioning still uses the lead time.
+
 ## Security
 
 - Each code is a 128-bit random-looking token (HMAC of a secret in `/data`); room numbers are never in the URL.

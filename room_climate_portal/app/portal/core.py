@@ -10,16 +10,21 @@ from zoneinfo import ZoneInfo
 
 from .audit import AuditLog
 from .config import Options, Paths
+from .datalog import DataLog
 from .ha import HAClient, HAError
 from .pins import PinStore
 from .holds import DefaultsStore, HoldError, HoldStore, parse_hhmm
-from .rooms import Room, clamp_setpoint, discover, load_overrides
+from .rooms import Room, _entity_area, clamp_setpoint, discover, load_overrides
 from .schedule import build_events, next_precondition
+from .sessions import SessionTracker, room_key
 from .tokens import TokenStore
+from .topology import Topology, is_circuit_open, is_valve_open, room_temperature
 
 _LOGGER = logging.getLogger(__name__)
 
 SCHEDULE_REFRESH_S = 300
+DATALOG_INTERVAL_S = 60
+PRUNE_INTERVAL_S = 86400
 MAX_LEAD_MINUTES = 600
 DEFAULT_LEAD_MINUTES = 120
 DEFAULT_PRINT_CAPTION = "Scanează- Termostat"
@@ -32,6 +37,14 @@ REGISTRY_EVENTS = (
     "label_registry_updated",
     "floor_registry_updated",
 )
+
+
+def _float(value) -> float | None:
+    try:
+        f = float(value)
+    except (TypeError, ValueError):
+        return None
+    return f if f == f else None
 
 
 def modes_of(attrs: dict) -> list:
@@ -78,6 +91,10 @@ class Portal:
         self.access = DefaultsStore(paths.access)  # {room: {"view_only": bool}}
         self.room_settings = DefaultsStore(paths.room_settings)  # {room: {"lead_minutes": int}}
         self._running_events: dict[tuple, dict] = {}  # (room, start, summary) -> event, while it heats
+        self.topology = Topology(paths.topology)
+        self.datalog = DataLog(paths.heating_db)
+        self.sessions = SessionTracker(self.datalog, self.topology, options.default_target_temp)
+        self._plant_index: dict[str, list[tuple[str, str | None]]] = {}  # entity -> [(kind, room/circuit)]
         ha.on_connect = self._on_connect
         ha.on_disconnect = self._on_disconnect
 
@@ -132,6 +149,14 @@ class Portal:
         if self.options.outdoor_sensor:
             index[self.options.outdoor_sensor].update(self.rooms)
         self._entity_rooms = dict(index)
+        members: dict[str, list[str]] = defaultdict(list)
+        dev_by_id = {d["id"]: d for d in devices}
+        for entry in entities:
+            area = None if entry.get("disabled_by") else _entity_area(entry, dev_by_id)
+            if area:
+                members[area].append(entry["entity_id"])
+        self.topology.refresh(self.rooms, members, self.states)
+        self._index_plant()
         self.ready = True
         _LOGGER.info("Discovered %d rooms", len(self.rooms))
         for room in self.rooms.values():
@@ -170,6 +195,123 @@ class Portal:
                 asyncio.create_task(self.refresh_schedule(rid))
             else:
                 self.broadcast(rid, {"type": "room", "room": self.snapshot(rid)})
+        if entity_id in self._plant_index:
+            try:
+                self._log_entity(entity_id, int(time.time()))
+            except Exception:  # noqa: BLE001  logging must never break the portal
+                _LOGGER.exception("Cannot log %s", entity_id)
+
+    # -------------------------------------------------------------- plant + log
+    def _index_plant(self) -> None:
+        index: dict[str, list[tuple[str, str | None]]] = defaultdict(list)
+        for circuit in self.topology.circuits:
+            index[circuit].append(("circuit", circuit))
+        for link in self.topology.links.values():
+            if link.valve:
+                index[link.valve].append(("valve", link.room_id))
+            if link.temperature:
+                index[link.temperature].append(("temp", link.room_id))
+        if self.options.outdoor_sensor:
+            index[self.options.outdoor_sensor].append(("outdoor", None))
+        self._plant_index = dict(index)
+
+    def _log_entity(self, entity_id: str, ts: int) -> None:
+        state = self.states.get(entity_id)
+        attrs = (state or {}).get("attributes") or {}
+        for kind, ref in self._plant_index.get(entity_id, ()):
+            if kind == "circuit":
+                is_open = is_circuit_open(state)
+                self.datalog.record(f"circuit:{ref}:on", 1.0 if is_open else 0.0, ts)
+                self.datalog.record(f"circuit:{ref}:heat_request", _float(attrs.get("heat_request")), ts)
+                self.datalog.record(f"circuit:{ref}:target", _float(attrs.get("temperature")), ts)
+                boiler = self.topology.boiler_of_circuit(ref)
+                n_open = len(self.topology.open_circuits(boiler.id, self.states)) if boiler else int(is_open)
+                self.sessions.observe(ref, is_open, ts, n_open)
+            elif kind == "valve":
+                self.datalog.record(f"valve:{entity_id}", 1.0 if is_valve_open(state) else 0.0, ts)
+            elif kind == "temp":
+                self.datalog.record(room_key(ref), room_temperature(self.topology.link(ref), self.states), ts)
+            elif kind == "outdoor":
+                self.datalog.record("outdoor", _float((state or {}).get("state")), ts)
+
+    def sample_plant(self, ts: int | None = None) -> None:
+        """Log every plant entity now; unchanged values are written only as a heartbeat."""
+        ts = int(ts if ts is not None else time.time())
+        for entity_id in list(self._plant_index):
+            self._log_entity(entity_id, ts)
+
+    async def datalog_loop(self) -> None:
+        last_prune = 0.0
+        while True:
+            await asyncio.sleep(DATALOG_INTERVAL_S)
+            if not (self.ha.connected.is_set() and self.ready):
+                continue
+            try:
+                await self.log_tick()
+                if time.time() - last_prune > PRUNE_INTERVAL_S:
+                    last_prune = time.time()
+                    await asyncio.to_thread(self.datalog.prune)
+            except Exception:  # noqa: BLE001
+                _LOGGER.exception("Data log failed")
+
+    async def log_tick(self, now: int | None = None) -> list[int]:
+        now = int(now if now is not None else time.time())
+        self.sample_plant(now)
+        runs = self.sessions.take_done(now)
+        await self.datalog.flush()
+        return await asyncio.to_thread(self.sessions.finalize, runs) if runs else []
+
+    def update_link(self, room_id: str, values: dict, client: str = "admin"):
+        link = self.topology.update_room(room_id, values)
+        self._index_plant()
+        self.audit.write(room=room_id, action="plant_link", client=client, **{k: values[k] for k in values})
+        return link
+
+    def plant(self) -> dict:
+        """Boilers with live circuit state, and every room's link, for the admin page."""
+        boilers = []
+        for b in self.topology.boilers:
+            circuits = []
+            for c in b.circuits:
+                st = self.states.get(c) or {}
+                attrs = st.get("attributes") or {}
+                circuits.append(
+                    {
+                        "entity_id": c,
+                        "name": attrs.get("friendly_name") or c,
+                        "zone": attrs.get("zone_number"),
+                        "available": bool(st) and st.get("state") not in ("unavailable", "unknown"),
+                        "open": is_circuit_open(st),
+                        "preset_mode": attrs.get("preset_mode"),
+                        "heat_request": _float(attrs.get("heat_request")),
+                        "target": _float(attrs.get("temperature")),
+                        "rooms": [l.room_id for l in self.topology.rooms_on_circuit(c)],
+                    }
+                )
+            boilers.append({"id": b.id, "name": b.name, "circuits": circuits, "open": sum(c["open"] for c in circuits)})
+        rooms = []
+        for rid, room in self.rooms.items():
+            link = self.topology.link(rid)
+            if link is None:
+                continue
+            rooms.append(
+                {
+                    **link.as_dict(),
+                    "name": room.name,
+                    "subtitle": room.subtitle,
+                    "temp_now": room_temperature(link, self.states),
+                    "valve_open": is_valve_open(self.states.get(link.valve)) if link.valve else None,
+                    "issues": self.topology.issues(rid, self.states),
+                }
+            )
+        candidates = {
+            "valves": sorted(e for e in self.states if e.startswith("switch.")),
+            "sensors": sorted(
+                e for e, st in self.states.items()
+                if e.startswith("sensor.") and (st.get("attributes") or {}).get("device_class") == "temperature"
+            ),
+        }
+        return {"boilers": boilers, "rooms": rooms, "candidates": candidates, "default_target": self.options.default_target_temp}
 
     # ---------------------------------------------------------------- schedules
     async def schedule_loop(self) -> None:
