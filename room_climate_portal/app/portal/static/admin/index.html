@@ -1,10 +1,10 @@
 <!doctype html>
-<html lang="en">
+<html lang="ro">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="color-scheme" content="light dark">
-<title>Room QR admin</title>
+<title>Administrare încălzire</title>
 <link rel="stylesheet" href="static/admin.css?v=__V__">
 <script src="static/admin.js?v=__V__" defer></script>
 <script src="static/plant.js?v=__V__" defer></script>
@@ -12,135 +12,135 @@
 <body>
 <header class="top">
   <div>
-    <h1>Room QR codes</h1>
-    <p class="sub" id="status">Loading…</p>
-    <nav class="views" aria-label="Views">
-      <a href="#" data-view="rooms">Rooms</a>
-      <a href="#plant" data-view="plant">Plant</a>
-      <a href="#sessions" data-view="sessions">Heating log</a>
+    <h1>Camere și încălzire</h1>
+    <p class="sub" id="status">Se încarcă…</p>
+    <nav class="views" aria-label="Secțiuni">
+      <a href="#" data-view="rooms">Camere</a>
+      <a href="#plant" data-view="plant">Instalație</a>
+      <a href="#sessions" data-view="sessions">Jurnal încălzire</a>
     </nav>
   </div>
   <div class="actions">
-    <button type="button" id="pin-all">PIN for all rooms</button>
-    <button type="button" id="lead-all">Lead time: all rooms</button>
-    <button type="button" id="caption-all">Print text: all rooms</button>
-    <button type="button" id="vo-all">View only: all rooms</button>
-    <button type="button" id="reload">Re-scan rooms</button>
-    <a class="button" id="print-shown" href="print?auto=1" target="_blank" rel="noopener" hidden>Print shown</a>
-    <a class="button primary" href="print?auto=1" target="_blank" rel="noopener">Print all QR codes</a>
+    <button type="button" id="pin-all">PIN pentru toate camerele</button>
+    <button type="button" id="lead-all">Preîncălzire: toate camerele</button>
+    <button type="button" id="caption-all">Text la printare: toate camerele</button>
+    <button type="button" id="vo-all">Doar vizualizare: toate camerele</button>
+    <button type="button" id="reload">Recitește camerele</button>
+    <a class="button" id="print-shown" href="print?auto=1" target="_blank" rel="noopener" hidden>Printează afișate</a>
+    <a class="button primary" href="print?auto=1" target="_blank" rel="noopener">Printează toate codurile QR</a>
   </div>
 </header>
 <main id="view-rooms">
   <div class="filters" id="filters" hidden>
-    <input type="search" id="q" placeholder="Search room, floor, code, entity…" aria-label="Search rooms" autocomplete="off">
-    <div class="chips" id="chips" role="group" aria-label="Filter">
-      <button type="button" data-f="all" class="on">All</button>
-      <button type="button" data-f="heating">Heating on</button>
-      <button type="button" data-f="manual">Manual / planned</button>
-      <button type="button" data-f="event">Event in 24 h</button>
-      <button type="button" data-f="pin">PIN on</button>
-      <button type="button" data-f="nopin">No PIN</button>
-      <button type="button" data-f="viewonly">View only</button>
-      <button type="button" data-f="issues">Problems</button>
+    <input type="search" id="q" placeholder="Caută cameră, etaj, cod, entitate…" aria-label="Caută camere" autocomplete="off">
+    <div class="chips" id="chips" role="group" aria-label="Filtru">
+      <button type="button" data-f="all" class="on">Toate</button>
+      <button type="button" data-f="heating">Încălzesc</button>
+      <button type="button" data-f="manual">Manual / planificat</button>
+      <button type="button" data-f="event">Eveniment în 24 h</button>
+      <button type="button" data-f="pin">Cu PIN</button>
+      <button type="button" data-f="nopin">Fără PIN</button>
+      <button type="button" data-f="viewonly">Doar vizualizare</button>
+      <button type="button" data-f="issues">Probleme</button>
     </div>
     <span class="count" id="count"></span>
   </div>
   <table id="rooms">
-    <thead><tr><th>Room</th><th>Thermostat now</th><th>Room settings <span class="th-sub">applied now · restored after events</span></th><th>Calendar &amp; lead time</th><th>Next event</th><th>QR code</th><th>PIN</th></tr></thead>
+    <thead><tr><th>Cameră</th><th>Termostatul acum</th><th>Setările camerei <span class="th-sub">aplicate acum · revin după evenimente</span></th><th>Calendar și preîncălzire</th><th>Următorul eveniment</th><th>Cod QR</th><th>PIN</th></tr></thead>
     <tbody></tbody>
   </table>
-  <p class="empty" id="empty" hidden>No rooms found. Put the label <code id="label"></code> on each room's Area in Home Assistant (Settings → Areas), or list rooms in <code>/addon_configs/…room_climate_portal/rooms.yaml</code>, then press “Re-scan rooms”.</p>
+  <p class="empty" id="empty" hidden>Nu am găsit nicio cameră. Pune eticheta <code id="label"></code> pe zona (Area) fiecărei camere în Home Assistant (Setări → Zone) sau listează camerele în <code>/addon_configs/…room_climate_portal/rooms.yaml</code>, apoi apasă „Recitește camerele”.</p>
 
-  <h2>Recent changes <button id="audit-toggle" class="small">Hide</button></h2>
+  <h2>Modificări recente <button id="audit-toggle" class="small">Ascunde</button></h2>
 <div class="filters" id="log-filter">
-  <input type="search" id="logq" placeholder="Search logs…" autocomplete="off" aria-label="Search logs">
+  <input type="search" id="logq" placeholder="Caută în jurnal…" autocomplete="off" aria-label="Caută în jurnal">
   <div class="filter-select">
-    <label for="log-action-filter">Action:</label>
+    <label for="log-action-filter">Acțiune:</label>
     <select id="log-action-filter">
-      <option value="all" selected>All</option>
-      <option value="view_only">View only</option>
-      <option value="changes_allowed">Changes allowed</option>
+      <option value="all" selected>Toate</option>
+      <option value="view_only">Doar vizualizare</option>
+      <option value="changes_allowed">Modificări permise</option>
       <option value="set_preset">Preset</option>
-      <option value="code_readable">Readable QR</option>
-      <option value="code_custom">Custom QR</option>
-      <option value="set_hvac_mode">HVAC mode</option>
-      <option value="set_temperature">Temperature</option>
-      <option value="rotate_token">Rotate token</option>
-      <option value="heating_on">Heating on</option>
-      <option value="heating_until">Heating until</option>
-      <option value="heating_planned">Heating planned</option>
-      <option value="heating_plan_cancelled">Heating cancel</option>
-      <option value="heating_off">Heating off</option>
-      <option value="setback">Setback</option>
-      <option value="hold_end_eco">Hold end eco</option>
-      <option value="restore_default">Restore default</option>
-      <option value="hold_end_kept_for_event">Hold end kept event</option>
-      <option value="lead_time">Lead time</option>
-      <option value="print_caption">Print text</option>
-      <option value="plant_link">Plant link</option>
-      <option value="session_note">Session note</option>
-      <option value="control">Circuit switched</option>
-      <option value="control_mode">Control mode</option>
-      <option value="control_error">Control error</option>
-      <option value="notify">Notification</option>
-      <option value="test_scheduled">Test scheduled</option>
-      <option value="lead_mode">Lead mode</option>
+      <option value="code_readable">QR ușor de citit</option>
+      <option value="code_custom">QR personalizat</option>
+      <option value="set_hvac_mode">Mod termostat</option>
+      <option value="set_temperature">Temperatură</option>
+      <option value="rotate_token">Cod QR nou</option>
+      <option value="heating_on">Încălzire pornită</option>
+      <option value="heating_until">Încălzire până la</option>
+      <option value="heating_planned">Încălzire planificată</option>
+      <option value="heating_plan_cancelled">Planificare anulată</option>
+      <option value="heating_off">Încălzire oprită</option>
+      <option value="setback">Coborâre temperatură</option>
+      <option value="hold_end_eco">Sfârșit manual → Eco</option>
+      <option value="restore_default">Revenire la setări</option>
+      <option value="hold_end_kept_for_event">Sfârșit manual, păstrat pentru eveniment</option>
+      <option value="lead_time">Preîncălzire</option>
+      <option value="print_caption">Text la printare</option>
+      <option value="plant_link">Legătură instalație</option>
+      <option value="session_note">Notă în jurnal</option>
+      <option value="control">Circuit comutat</option>
+      <option value="control_mode">Mod de comandă</option>
+      <option value="control_error">Eroare de comandă</option>
+      <option value="notify">Notificare</option>
+      <option value="test_scheduled">Test programat</option>
+      <option value="lead_mode">Mod preîncălzire</option>
     </select>
   </div>
-  <div class="chips" id="log-chips" role="group" aria-label="Filter logs">
-    <button type="button" data-f="all" class="on">All</button>
+  <div class="chips" id="log-chips" role="group" aria-label="Filtrează jurnalul">
+    <button type="button" data-f="all" class="on">Toate</button>
   </div>
 </div>
   <table id="audit">
-    <thead><tr><th>Time</th><th>Room</th><th>Change</th><th>Phone</th></tr></thead>
+    <thead><tr><th>Ora</th><th>Cameră</th><th>Modificare</th><th>Telefon</th></tr></thead>
     <tbody></tbody>
   </table>
 </main>
 <main id="view-plant" hidden>
-  <p class="sub">Which boiler circuit heats each room, its valve and its temperature sensor. Values marked <span class="guess">guess</span> come from the room's Area until you pick one. Nothing here switches heating yet: the links tell the heating log what to record.</p>
-  <h2>Heating control</h2>
+  <p class="sub">Ce circuit de la ce centrală încălzește fiecare cameră, cu robinetul și senzorul ei de temperatură. Valorile marcate <span class="guess">ghicit</span> sunt luate din zona (Area) camerei până alegi tu altceva.</p>
+  <h2>Comanda încălzirii</h2>
   <p class="sub" id="ctl-sub"></p>
   <div class="boilers" id="control"></div>
-  <h2>Start estimates</h2>
+  <h2>Ora estimată de pornire</h2>
   <p class="sub" id="est-sub"></p>
   <div class="scroll">
     <table id="estimates">
-      <thead><tr><th>Circuit</th><th>Next event</th><th>Estimated start</th><th>How it is calculated</th><th>Room now → at start</th><th>Data</th><th>Lead time now</th></tr></thead>
+      <thead><tr><th>Circuit</th><th>Următorul eveniment</th><th>Pornire estimată</th><th>Cum e calculată</th><th>Camera acum → la pornire</th><th>Date</th><th>Preîncălzirea folosită acum</th></tr></thead>
       <tbody></tbody>
     </table>
   </div>
-  <p class="empty" id="est-empty" hidden>No estimate yet: link rooms to circuits below. A circuit gets an estimate when one of its rooms has a timed event in the calendar.</p>
+  <p class="empty" id="est-empty" hidden>Încă nu există nicio estimare: leagă camerele de circuite mai jos. Un circuit primește o estimare când una dintre camerele lui are un eveniment cu oră în calendar.</p>
   <p class="sub" id="est-unlinked" hidden></p>
-  <h2>Boilers</h2>
+  <h2>Centrale</h2>
   <div class="boilers" id="boilers"></div>
-  <h2>Rooms</h2>
+  <h2>Camere</h2>
   <div class="scroll">
     <table id="links">
-      <thead><tr><th>Room</th><th>Boiler</th><th>Circuit</th><th>Valve</th><th>Temperature sensor</th><th>Heating</th><th>Comfort</th><th>Now</th></tr></thead>
+      <thead><tr><th>Cameră</th><th>Centrală</th><th>Circuit</th><th>Robinet</th><th>Senzor de temperatură</th><th>Încălzire</th><th>Confort</th><th>Acum</th></tr></thead>
       <tbody></tbody>
     </table>
   </div>
 </main>
 <main id="view-sessions" hidden>
-  <p class="sub">Every time a circuit opens (heat) or stays closed for 2 h or more (cool), each room on it gets a row. The model will learn its start times from these rows. Add a note to mark tests, for example “Test A, one circuit”.</p>
+  <p class="sub">De fiecare dată când un circuit pornește (încălzire) sau stă oprit cel puțin 2 h (răcire), fiecare cameră de pe el primește un rând. Din aceste rânduri învață modelul orele de pornire. Adaugă o notă ca să marchezi testele, de exemplu „Test A, un circuit”.</p>
   <div class="filters">
     <label for="sess-circuit">Circuit:</label>
-    <select id="sess-circuit"><option value="">All circuits</option></select>
-    <button type="button" class="small" id="sess-reload">Refresh</button>
+    <select id="sess-circuit"><option value="">Toate circuitele</option></select>
+    <button type="button" class="small" id="sess-reload">Reîncarcă</button>
     <span class="count" id="sess-count"></span>
   </div>
   <div class="scroll">
     <table id="sessions">
-      <thead><tr><th>Start</th><th>Run</th><th>Circuit</th><th>Room</th><th>Duration</th><th>Room °C</th><th>Outdoor</th><th>Open circuits</th><th>Dead time</th><th>Rate</th><th>To comfort</th><th>Cooling τ</th><th>Note</th></tr></thead>
+      <thead><tr><th>Început</th><th>Rulare</th><th>Circuit</th><th>Cameră</th><th>Durată</th><th>Camera °C</th><th>Afară</th><th>Circuite pornite</th><th>Timp mort</th><th>Viteză</th><th>Până la confort</th><th>Răcire τ</th><th>Notă</th></tr></thead>
       <tbody></tbody>
     </table>
   </div>
-  <p class="empty" id="sess-empty" hidden>No heating runs yet. Rows appear after a circuit has been on for at least 10 minutes and then closes.</p>
-  <h2>Estimates vs what happened</h2>
-  <p class="sub">The last estimate made before each event's estimated start, next to what really happened. Use it to judge the estimates before they switch anything.</p>
+  <p class="empty" id="sess-empty" hidden>Încă nu există rulări. Rândurile apar după ce un circuit a fost pornit cel puțin 10 minute și apoi s-a oprit.</p>
+  <h2>Estimat față de realitate</h2>
+  <p class="sub">Ultima estimare făcută înainte de ora estimată de pornire a fiecărui eveniment, lângă ce s-a întâmplat de fapt. Folosește-o ca să judeci estimările înainte să le lași să comande.</p>
   <div class="scroll">
     <table id="est-history">
-      <thead><tr><th>Event</th><th>Circuit · room</th><th>Estimated start</th><th>Lead time now</th><th>Circuit opened</th><th>Room at event start</th><th>Reached target</th></tr></thead>
+      <thead><tr><th>Eveniment</th><th>Circuit · cameră</th><th>Pornire estimată</th><th>Preîncălzire fixă</th><th>Circuitul a pornit</th><th>Camera la începutul evenimentului</th><th>A ajuns la țintă</th></tr></thead>
       <tbody></tbody>
     </table>
   </div>
@@ -152,7 +152,7 @@
     <p id="dlg-text"></p>
     <input id="dlg-input" type="password" inputmode="numeric" maxlength="8" placeholder="PIN" aria-label="PIN">
     <div class="dlg-err" id="dlg-err" role="alert"></div>
-    <div class="dlg-btns"><button type="button" id="dlg-cancel">Cancel</button><button type="submit" id="dlg-ok" class="primary">OK</button></div>
+    <div class="dlg-btns"><button type="button" id="dlg-cancel">Renunță</button><button type="submit" id="dlg-ok" class="primary">OK</button></div>
   </form>
 </div>
 </body>

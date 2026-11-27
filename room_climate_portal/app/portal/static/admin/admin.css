@@ -290,3 +290,11 @@ svg.chart{width:100%;max-width:760px;height:auto;display:block}
   #sessions tr.chart-row td{padding:0 4px}
   .legend{flex-wrap:wrap;gap:8px 14px}
 }
+#estimates td.m-more{display:none}
+@media (max-width:900px){
+  /* estimate cards: only the next event and the estimated start until "Detalii" is opened */
+  #estimates tr:not(.open) td:not(.est-key):not(.m-more){display:none}
+  #estimates td.m-more{display:block;grid-column:1/-1;padding-top:8px}
+  #estimates tr.open td.m-more{order:99}
+  #estimates td.m-more button{width:100%;padding:10px;font-size:14px;border-radius:10px}
+}
