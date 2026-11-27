@@ -197,8 +197,10 @@ select.mode{margin-top:6px;font:inherit;font-size:12px;padding:5px 8px;border-ra
 .boiler h3{margin:0;font-size:15px;display:flex;justify-content:space-between;gap:8px}
 .boiler h3 span{font-weight:500;font-size:12px;color:var(--muted)}
 .circ{display:grid;grid-template-columns:auto 1fr;gap:2px 8px;padding:8px 0;border-top:1px solid var(--line);margin-top:8px}
-.circ .dot{margin-top:6px}
+.circ .dot{margin-top:6px;background:var(--line)}
+.circ .dot.on{background:var(--ok)}
 .circ small{grid-column:2;color:var(--muted);font-size:12px}
+.circ>.chart-box{grid-column:1/-1}
 .scroll{overflow-x:auto}
 #links select,#links input,#view-sessions select,#sessions input{font:inherit;font-size:12px;padding:5px 8px;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--ink);max-width:230px}
 #links input{width:70px}
@@ -241,3 +243,50 @@ svg.chart{width:100%;max-width:760px;height:auto;display:block}
 .legend .l-out{background:var(--muted)}
 .legend .l-on{background:var(--accent);opacity:.3;height:10px}
 #est-sub .mode-btns{display:inline-flex;margin-left:6px}
+#est-sub{margin-bottom:10px}
+
+/* ---------- Plant and Heating log on phones ---------- */
+@media (max-width:900px){
+  .views{overflow-x:auto;scrollbar-width:none}
+  .views a{flex:none;padding:9px 14px;font-size:14px}
+  .boilers{grid-template-columns:1fr}
+  .boiler{padding:12px}
+  .boiler h3{flex-wrap:wrap}
+  .mode-btns button{padding:9px 14px;font-size:14px}
+  .circ small{font-size:13px}
+  .ctl summary{font-size:14px;padding:6px 0}
+  .ctl .autos{max-height:50vh}
+  .ctl label.auto{font-size:14px;padding:6px 2px}
+  .ctl .auto-q,.ctl details.test input{font-size:16px;padding:8px 10px}
+  .ctl details.test label{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:14px}
+  .ctl details.test input{width:96px}
+  .ctl details.test input[type=datetime-local]{width:auto;min-width:0;flex:1}
+  .ctl details.test button,[data-save-takeover]{width:100%;padding:11px;font-size:14px;margin-top:6px}
+  #est-sub .mode-btns{display:flex;margin:8px 0 0}
+  #est-sub .mode-btns button{flex:1}
+  #view-sessions .filters{position:static}
+  #view-sessions .filters select{flex:1;font-size:16px;padding:9px 10px}
+  .scroll{overflow:visible}
+  #links,#links tbody,#estimates,#estimates tbody,#sessions,#sessions tbody,#est-history,#est-history tbody{display:block;background:none;border:0;border-radius:0}
+  #links thead,#estimates thead,#sessions thead,#est-history thead{display:none}
+  #links tr,#estimates tr,#sessions tr,#est-history tr{display:grid;grid-template-columns:1fr 1fr;background:var(--card);border:1px solid var(--line);border-radius:14px;margin-bottom:10px;padding:8px 0}
+  #links td,#estimates td,#sessions td,#est-history td{display:block;border:0;padding:6px 14px;white-space:normal;min-width:0;overflow-wrap:anywhere}
+  #links td[data-label]::before,#estimates td[data-label]::before,#sessions td[data-label]::before,#est-history td[data-label]::before{content:attr(data-label);display:block;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-bottom:2px}
+  /* the first cell names the card: full width, no label */
+  #links td:first-child,#estimates td:first-child,#sessions td:first-child,#est-history td:first-child{grid-column:1/-1;font-size:15px}
+  #links td:first-child::before,#estimates td:first-child::before,#est-history td:first-child::before{display:none}
+  /* wide cells: selects, the calculation, notes */
+  #links td:nth-child(2),#links td:nth-child(3),#links td:nth-child(4),#links td:nth-child(5),#links td:nth-child(6),
+  #estimates td.calc,#sessions td.note,#est-history td:nth-child(2){grid-column:1/-1}
+  #links select,#links input{width:100%;max-width:none;font-size:16px;padding:10px 12px;border-radius:10px}
+  #links input{width:110px}
+  #estimates td.calc{min-width:0;font-size:13px}
+  .est-start{font-size:22px}
+  #sessions td.note{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+  #sessions td.note::before{flex-basis:100%}
+  #sessions .note input{flex:1;min-width:0;width:auto;font-size:16px;padding:9px 10px}
+  #sessions .note button{padding:9px 12px;font-size:13px}
+  #sessions tr.chart-row{display:block;padding:8px}
+  #sessions tr.chart-row td{padding:0 4px}
+  .legend{flex-wrap:wrap;gap:8px 14px}
+}

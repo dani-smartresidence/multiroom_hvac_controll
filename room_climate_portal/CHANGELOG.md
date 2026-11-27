@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.16.1
+- **Plant and Heating log on phones**: the tables become cards with a label on each value, selects and inputs are full
+  width with 16 px text (no zoom on iPhone), the boiler cards stack, buttons are bigger, and charts size to the screen.
+- The "Last 24 h" chart no longer squeezes the circuit's text into a narrow column.
+- Closed circuits show a grey dot instead of an orange one; the τ column is called "Cooling τ".
+
 ## 0.16.0
 - **Early stop**: heating stops before an event ends, as long as the room loses at most `coast_drop` °C (from its τ).
 - **Dynamic setback**: before an event within `setback_horizon_hours`, rooms are kept above the lowest temperature

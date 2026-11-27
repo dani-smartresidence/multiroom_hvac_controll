@@ -25,6 +25,18 @@
       });
   }
 
+  // On phones the tables become cards: each cell shows its column name (see admin.css).
+  function labelCells(table) {
+    var heads = Array.prototype.map.call(table.querySelectorAll("thead th"), function (th) {
+      return (th.firstChild && th.firstChild.textContent || th.textContent).trim();
+    });
+    table.querySelectorAll("tbody tr").forEach(function (tr) {
+      Array.prototype.forEach.call(tr.children, function (td, i) {
+        if (!td.hasAttribute("colspan") && heads[i]) td.setAttribute("data-label", heads[i]);
+      });
+    });
+  }
+
   // ------------------------------------------------------------ views
   var VIEWS = ["rooms", "plant", "sessions"];
   function current() {
@@ -215,6 +227,7 @@
       $("#est-empty").hidden = rows.length > 0;
       $("#estimates").hidden = rows.length === 0;
       $("#estimates tbody").innerHTML = rows.map(estimateRow).join("");
+      labelCells($("#estimates"));
       var un = $("#est-unlinked");
       un.hidden = !d.unlinked.length;
       un.innerHTML = d.unlinked.length ? "Rooms with events but no circuit (no estimate): " + d.unlinked.map(function (u) {
@@ -240,7 +253,7 @@
         (e.n_open > 1 ? " (" + e.n_open + " circuits of " + esc(c.boiler_name) + " heat at the same time, so " + Math.round(e.share * 100) + "% of " + num(e.rate_alone, 2) + " °C/h)" : "") +
         " + " + minutes(e.margin_min) + " margin = <b>" + minutes(e.lead_min) + "</b>";
     var diff = e.fixed_start - e.start;
-    return "<tr><td><b>" + esc(c.name) + '</b><div class="muted">' + esc(c.boiler_name) + "</div>" +
+    return "<tr><td><b>" + esc(c.name) + "</b>" + (c.boiler_name && c.boiler_name !== c.name ? '<div class="muted">' + esc(c.boiler_name) + "</div>" : "") +
       '<div class="mono muted">' + esc(c.circuit) + '</div><div class="muted">' + (c.open_now ? "open now" : "closed now") + "</div></td>" +
       "<td><b>" + esc(e.room_name) + "</b><div>" + esc(e.event_summary) + '</div><div class="muted">' + esc(day(e.event_start)) + " · target " + num(e.target) + " °C</div></td>" +
       '<td><span class="est-start">' + hhmm(e.start) + '</span><div class="muted">' + minutes(e.lead_min) + " before</div>" + status + "</td>" +
@@ -266,6 +279,7 @@
     var focused = document.activeElement && document.activeElement.closest && document.activeElement.closest("#links");
     if (focused) return;  // don't redraw under an open menu
     $("#links tbody").innerHTML = PLANT.rooms.map(linkRow).join("");
+    labelCells($("#links"));
   }
   function opt(value, label, selected) {
     return '<option value="' + esc(value) + '"' + (selected ? " selected" : "") + ">" + esc(label) + "</option>";
@@ -343,6 +357,7 @@
           '<td class="note"><input type="text" maxlength="200" value="' + esc(s.note || "") + '" data-session="' + s.id + '" aria-label="Note"> <button type="button" class="small" data-save="' + s.id + '">Save</button>' +
           ' <button type="button" class="small" data-sess-chart="' + s.id + '" data-circuit="' + esc(s.circuit) + '" data-room="' + esc(s.room || "") + '" data-from="' + s.start + '" data-to="' + s.end + '">Chart</button></td></tr>';
       }).join("");
+      labelCells($("#sessions"));
     });
   }
   function loadHistory() {
@@ -360,6 +375,7 @@
           "<td>" + opened + "</td><td class=\"mono\">" + atEvent + "</td>" +
           "<td>" + (!done ? "–" : h.reached_at ? hhmm(h.reached_at) : '<span class="late">not reached</span>') + "</td></tr>";
       }).join("") || '<tr><td colspan="7" class="muted">No estimates yet.</td></tr>';
+      labelCells($("#est-history"));
     });
   }
   $("#sess-circuit").addEventListener("change", loadSessions);
@@ -395,7 +411,7 @@
       series("circuit:" + circuit + ":on", from, to)]).then(function (res) {
       var temp = res[0], out = res[1], on = res[2];
       if (!temp.length && !out.length && !on.length) { box.innerHTML = '<p class="muted">No data in this period yet.</p>'; return; }
-      var W = 720, H = 220, L = 40, R = 12, T = 12, B = 26;
+      var W = Math.max(300, Math.min(760, box.clientWidth || 720)), H = W < 500 ? 200 : 220, L = 36, R = 10, T = 12, B = 26;
       var vals = temp.concat(out).map(function (p) { return p[1]; });
       var lo = Math.floor(Math.min.apply(null, vals.length ? vals : [0]) - 1), hi = Math.ceil(Math.max.apply(null, vals.length ? vals : [20]) + 1);
       function x(t) { return L + (Math.max(from, Math.min(to, t)) - from) / (to - from) * (W - L - R); }
@@ -418,7 +434,8 @@
       });
       var grid = "", step = Math.max(1, Math.round((hi - lo) / 5));
       for (var v = lo; v <= hi; v += step) grid += '<line class="c-grid" x1="' + L + '" x2="' + (W - R) + '" y1="' + y(v) + '" y2="' + y(v) + '"/><text class="c-lbl" x="' + (L - 6) + '" y="' + (y(v) + 4) + '" text-anchor="end">' + v + "°</text>";
-      var hours = (to - from) / 3600, every = hours > 30 ? 6 : hours > 12 ? 3 : 1, ticks = "";
+      var hours = (to - from) / 3600, slots = Math.max(3, Math.floor((W - L - R) / 60));
+      var every = [1, 2, 3, 4, 6, 12, 24].filter(function (h) { return hours / h <= slots; })[0] || 24, ticks = "";
       var t0 = Math.ceil(from / 3600) * 3600;
       for (var t = t0; t <= to; t += 3600) {
         if (((t / 3600) % every) !== 0) continue;
