@@ -7,6 +7,7 @@ import io
 import json
 import logging
 import os
+import time
 from pathlib import Path
 
 import segno
@@ -17,6 +18,7 @@ from .holds import HoldError
 from .ha import HAError
 from .pins import PIN_RE, PinLocked
 from .tokens import CodeError
+from .topology import TopologyError
 
 _LOGGER = logging.getLogger(__name__)
 STATIC = Path(__file__).parent / "static"
@@ -600,6 +602,57 @@ def build_admin_app(portal: Portal) -> web.Application:
     async def audit(request):
         limit = min(int(request.query.get("limit", "200")), 2000)
         return _json(portal.audit.tail(limit, request.query.get("room")))
+
+    @routes.get("/api/plant")
+    async def plant(_request):
+        return _json(portal.plant())
+
+    @routes.post("/api/plant/rooms/{room_id}")
+    async def plant_room(request):
+        rid = get_room(request)
+        data = await admin_body(request)
+        try:
+            portal.update_link(rid, data)
+        except TopologyError as err:
+            return _json({"error": str(err)}, 400)
+        return _json(portal.plant())
+
+    @routes.get("/api/sessions")
+    async def sessions(request):
+        try:
+            limit = max(1, min(int(request.query.get("limit", "200")), 2000))
+        except ValueError:
+            limit = 200
+        rows = await asyncio.to_thread(
+            portal.datalog.sessions, limit, request.query.get("circuit") or None, request.query.get("room") or None
+        )
+        return _json(rows)
+
+    @routes.post("/api/sessions/{session_id}/note")
+    async def session_note(request):
+        try:
+            sid = int(request.match_info["session_id"])
+        except ValueError:
+            raise web.HTTPNotFound()
+        data = await admin_body(request)
+        note = str(data.get("note") or "").strip()[:200]
+        if not await asyncio.to_thread(portal.datalog.set_note, sid, note):
+            raise web.HTTPNotFound()
+        portal.audit.write(action="session_note", client="admin", session=sid, note=note)
+        return _json({"id": sid, "note": note or None})
+
+    @routes.get("/api/samples")
+    async def samples(request):
+        key = request.query.get("key")
+        if not key:
+            return _json(await asyncio.to_thread(portal.datalog.keys))
+        now = time.time()
+        try:
+            start = float(request.query.get("from", now - 86400))
+            end = float(request.query.get("to", now))
+        except ValueError:
+            return _json({"error": "from/to must be epoch seconds"}, 400)
+        return _json(await asyncio.to_thread(portal.datalog.series, key, start, end))
 
     @routes.get("/qr/{room_id}.svg")
     async def qr(request):

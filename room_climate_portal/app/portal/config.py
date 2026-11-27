@@ -98,6 +98,14 @@ class Paths:
         return self.data / "pins.json"
 
     @property
+    def topology(self) -> Path:
+        return self.data / "topology.json"
+
+    @property
+    def heating_db(self) -> Path:
+        return self.data / "heating.db"
+
+    @property
     def rooms_override(self) -> Path:
         return self.config / "rooms.yaml"
 
