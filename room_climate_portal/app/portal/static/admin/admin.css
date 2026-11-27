@@ -216,3 +216,12 @@ select.mode{margin-top:6px;font:inherit;font-size:12px;padding:5px 8px;border-ra
 .conf-high{color:var(--ok)}
 .late{color:var(--warn);font-weight:600}
 .good{color:var(--ok);font-weight:600}
+.ctl h3{align-items:center}
+.mode-btns{display:flex;gap:4px}
+.mode-btns button.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.mode-btns button.on.danger{background:#C2410C;border-color:#C2410C;color:#fff}
+.ctl details{margin-top:6px}
+.ctl summary{cursor:pointer;font-size:12px;font-weight:600}
+.ctl .autos{max-height:220px;overflow:auto;border:1px solid var(--line);border-radius:8px;padding:6px;margin:6px 0;display:flex;flex-direction:column;gap:2px}
+.ctl label.auto{font-size:12px;display:flex;gap:6px;align-items:baseline}
+.ctl .auto-q{width:100%;font:inherit;font-size:12px;padding:5px 8px;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--ink);margin-top:6px}
