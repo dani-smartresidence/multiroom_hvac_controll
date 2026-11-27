@@ -186,3 +186,24 @@ select.mode{margin-top:6px;font:inherit;font-size:12px;padding:5px 8px;border-ra
 .lead-in:focus{outline:none;border-color:var(--accent)}
 @media (max-width:900px){.lead{font-size:14px}.lead-in{font-size:16px;width:80px;padding:8px}}
 .caption{margin-top:6px;font-size:12px;overflow-wrap:anywhere}
+
+/* ---------- plant and heating log ---------- */
+.views{display:flex;gap:4px;margin-top:10px}
+.views a{padding:6px 12px;border-radius:999px;border:1px solid var(--line);color:var(--ink);text-decoration:none;font-weight:600;font-size:13px;background:var(--card)}
+.views a.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.guess{display:inline-block;font-size:11px;color:var(--muted);border:1px dashed var(--line);border-radius:999px;padding:0 6px;margin-left:4px}
+.boilers{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px;margin-top:12px}
+.boiler{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+.boiler h3{margin:0;font-size:15px;display:flex;justify-content:space-between;gap:8px}
+.boiler h3 span{font-weight:500;font-size:12px;color:var(--muted)}
+.circ{display:grid;grid-template-columns:auto 1fr;gap:2px 8px;padding:8px 0;border-top:1px solid var(--line);margin-top:8px}
+.circ .dot{margin-top:6px}
+.circ small{grid-column:2;color:var(--muted);font-size:12px}
+.scroll{overflow-x:auto}
+#links select,#links input,#view-sessions select,#sessions input{font:inherit;font-size:12px;padding:5px 8px;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--ink);max-width:230px}
+#links input{width:70px}
+#links td,#sessions td{white-space:nowrap}
+#sessions td.note{white-space:normal;min-width:200px}
+#sessions .note input{width:140px}
+.kind-heat{color:var(--accent);font-weight:600}
+.kind-cool{color:var(--muted);font-weight:600}

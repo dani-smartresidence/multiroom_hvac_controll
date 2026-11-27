@@ -7,12 +7,18 @@
 <title>Room QR admin</title>
 <link rel="stylesheet" href="static/admin.css?v=__V__">
 <script src="static/admin.js?v=__V__" defer></script>
+<script src="static/plant.js?v=__V__" defer></script>
 </head>
 <body>
 <header class="top">
   <div>
     <h1>Room QR codes</h1>
     <p class="sub" id="status">Loading…</p>
+    <nav class="views" aria-label="Views">
+      <a href="#" data-view="rooms">Rooms</a>
+      <a href="#plant" data-view="plant">Plant</a>
+      <a href="#sessions" data-view="sessions">Heating log</a>
+    </nav>
   </div>
   <div class="actions">
     <button type="button" id="pin-all">PIN for all rooms</button>
@@ -24,7 +30,7 @@
     <a class="button primary" href="print?auto=1" target="_blank" rel="noopener">Print all QR codes</a>
   </div>
 </header>
-<main>
+<main id="view-rooms">
   <div class="filters" id="filters" hidden>
     <input type="search" id="q" placeholder="Search room, floor, code, entity…" aria-label="Search rooms" autocomplete="off">
     <div class="chips" id="chips" role="group" aria-label="Filter">
@@ -71,6 +77,8 @@
       <option value="hold_end_kept_for_event">Hold end kept event</option>
       <option value="lead_time">Lead time</option>
       <option value="print_caption">Print text</option>
+      <option value="plant_link">Plant link</option>
+      <option value="session_note">Session note</option>
     </select>
   </div>
   <div class="chips" id="log-chips" role="group" aria-label="Filter logs">
@@ -81,6 +89,33 @@
     <thead><tr><th>Time</th><th>Room</th><th>Change</th><th>Phone</th></tr></thead>
     <tbody></tbody>
   </table>
+</main>
+<main id="view-plant" hidden>
+  <p class="sub">Which boiler circuit heats each room, its valve and its temperature sensor. Values marked <span class="guess">guess</span> come from the room's Area until you pick one. Nothing here switches heating yet: the links tell the heating log what to record.</p>
+  <div class="boilers" id="boilers"></div>
+  <h2>Rooms</h2>
+  <div class="scroll">
+    <table id="links">
+      <thead><tr><th>Room</th><th>Boiler</th><th>Circuit</th><th>Valve</th><th>Temperature sensor</th><th>Heating</th><th>Comfort</th><th>Now</th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </div>
+</main>
+<main id="view-sessions" hidden>
+  <p class="sub">Every time a circuit opens (heat) or stays closed for 2 h or more (cool), each room on it gets a row. The model will learn its start times from these rows. Add a note to mark tests, for example “Test A, one circuit”.</p>
+  <div class="filters">
+    <label for="sess-circuit">Circuit:</label>
+    <select id="sess-circuit"><option value="">All circuits</option></select>
+    <button type="button" class="small" id="sess-reload">Refresh</button>
+    <span class="count" id="sess-count"></span>
+  </div>
+  <div class="scroll">
+    <table id="sessions">
+      <thead><tr><th>Start</th><th>Run</th><th>Circuit</th><th>Room</th><th>Duration</th><th>Room °C</th><th>Outdoor</th><th>Open circuits</th><th>Dead time</th><th>Rate</th><th>To comfort</th><th>τ</th><th>Note</th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </div>
+  <p class="empty" id="sess-empty" hidden>No heating runs yet. Rows appear after a circuit has been on for at least 10 minutes and then closes.</p>
 </main>
 <div class="flash" id="flash" role="status" hidden></div>
 <div class="dlg-back" id="dlg" hidden>
