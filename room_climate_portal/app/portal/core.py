@@ -11,13 +11,14 @@ from zoneinfo import ZoneInfo
 from .audit import AuditLog
 from .config import Options, Paths
 from .controller import (
-    CLOSED_PRESET, HEARTBEAT_ENTITY, OPEN_PRESET, ControlStore, Decision, decide_circuit, room_need,
+    CLOSED_PRESET, HEARTBEAT_ENTITY, OPEN_PRESET, ControlStore, Decision, decide_circuit, event_target, experiment_step,
+    room_need,
 )
 from .datalog import DataLog
 from .ha import HAClient, HAError
 from .pins import PinStore
 from .holds import DefaultsStore, HoldError, HoldStore, parse_hhmm
-from .model import Candidate, CircuitPlan, fit_models, plan_circuits
+from .model import Candidate, CircuitPlan, coast_minutes, fit_models, model_for, plan_circuits, setback_floor
 from .rooms import Room, _entity_area, clamp_setpoint, discover, load_overrides
 from .schedule import build_events, next_precondition
 from .sessions import SessionTracker, room_key
@@ -30,6 +31,8 @@ SCHEDULE_REFRESH_S = 300
 DATALOG_INTERVAL_S = 60
 PRUNE_INTERVAL_S = 86400
 MODEL_SESSIONS = 5000
+FORECAST_REFRESH_S = 1800
+SWITCH_CONFIRM_S = 300
 MAX_LEAD_MINUTES = 600
 DEFAULT_LEAD_MINUTES = 120
 DEFAULT_PRINT_CAPTION = "Scanează- Termostat"
@@ -104,7 +107,14 @@ class Portal:
         self._plant_index: dict[str, list[tuple[str, str | None]]] = {}  # entity -> [(kind, room/circuit)]
         self.models = fit_models(self.datalog.sessions(limit=MODEL_SESSIONS))
         self.control = ControlStore(paths.control)
+        self.sessions.note_for = self.control.experiment_note
         self.decisions: dict[str, Decision] = {}
+        self.room_leads: dict[str, int] = {}  # estimated lead (min) for each room's next event
+        self.forecast: list[tuple[int, float]] = []  # hourly outdoor forecast (epoch s, °C)
+        self._forecast_at = 0.0
+        self._preheat: dict[str, dict] = {}  # circuit -> preheat plan, frozen when the circuit opened for it
+        self._pending_switch: dict[str, tuple[str, int]] = {}  # circuit -> (preset sent, when)
+        self._notified: dict[str, float] = {}
         ha.on_connect = self._on_connect
         ha.on_disconnect = self._on_disconnect
 
@@ -274,16 +284,81 @@ class Portal:
         if ids or not any(self.models):
             rows = await asyncio.to_thread(self.datalog.sessions, MODEL_SESSIONS)
             self.models = fit_models(rows)
+        await self._refresh_forecast(now)
         estimates = self.estimates(now)
         await asyncio.to_thread(self._save_estimates, estimates, now)
+        await self._apply_leads()
         await self.control_tick(estimates, now)
+        await self._publish_circuit_sensors(estimates)
+        await self._check_sensors(now)
         return ids
+
+    # ----------------------------------------------------------------- forecast
+    async def _refresh_forecast(self, now: int) -> None:
+        entity = self.options.weather_entity
+        if not entity or now - self._forecast_at < FORECAST_REFRESH_S:
+            return
+        self._forecast_at = now
+        try:
+            resp = await self.ha.call_service("weather", "get_forecasts", {"type": "hourly"}, entity_id=entity, return_response=True)
+        except HAError as err:
+            _LOGGER.warning("Cannot read the forecast of %s: %s", entity, err)
+            return
+        rows = ((resp or {}).get(entity) or {}).get("forecast") or []
+        self.forecast = sorted(
+            (int(datetime.fromisoformat(r["datetime"]).timestamp()), float(r["temperature"]))
+            for r in rows if r.get("datetime") and _float(r.get("temperature")) is not None
+        )
+
+    def _outdoor_at(self, start: int, end: int) -> float | None:
+        """Mean forecast temperature over [start, end], or the nearest hour within 3 h."""
+        if not self.forecast:
+            return None
+        inside = [t for ts, t in self.forecast if start - 1800 <= ts <= end]
+        if inside:
+            return round(sum(inside) / len(inside), 1)
+        ts, t = min(self.forecast, key=lambda f: abs(f[0] - start))
+        return t if abs(ts - start) <= 3 * 3600 else None
+
+    def outdoor_now(self) -> float | None:
+        return _float((self.states.get(self.options.outdoor_sensor) or {}).get("state")) if self.options.outdoor_sensor else None
+
+    # ------------------------------------------------------------ notifications
+    async def _notify(self, key: str, title: str, message: str, cooldown_s: float = 6 * 3600, now: float | None = None) -> bool:
+        now = now if now is not None else time.time()
+        if now - self._notified.get(key, -1e12) < cooldown_s:
+            return False
+        self._notified[key] = now
+        service = self.options.notify_service
+        try:
+            if service:
+                domain, _, name = service.partition(".")
+                await self.ha.call_service(domain, name, {"title": title, "message": message})
+            else:
+                await self.ha.call_service("persistent_notification", "create",
+                                           {"title": title, "message": message, "notification_id": f"rcp_{key}"})
+        except HAError as err:
+            _LOGGER.warning("Cannot notify %s: %s", key, err)
+        self.audit.write(action="notify", client="controller", key=key, new=title, detail=message)
+        return True
+
+    async def _check_sensors(self, now: int) -> None:
+        offline = sorted(
+            self.rooms[l.room_id].name for l in self.topology.links.values()
+            if l.room_id in self.rooms and l.category != "none" and l.circuit and l.temperature
+            and (self.states.get(l.temperature) or {}).get("state") in (None, "unknown", "unavailable")
+        )
+        if offline:
+            await self._notify("sensors_offline", "Room sensors offline",
+                               "No temperature from: " + ", ".join(offline) + ". These rooms heat without feedback.",
+                               cooldown_s=24 * 3600, now=now)
 
     # ------------------------------------------------------------------ control
     async def control_tick(self, estimates: dict, now: int) -> None:
         """Decide every circuit; send the decision for boilers in active mode."""
         now_dt = datetime.fromtimestamp(now, self.tz)
         opts = self.options
+        outdoor = self.outdoor_now()
         by_circuit = {c["circuit"]: c["estimate"] for c in estimates["circuits"]}
         for boiler in self.topology.boilers:
             cfg = self.control.boiler(boiler.id)
@@ -300,16 +375,15 @@ class Portal:
                 attrs = (st or {}).get("attributes") or {}
                 available = bool(st) and st.get("state") not in ("unavailable", "unknown")
                 is_open = attrs.get("preset_mode") == OPEN_PRESET
+                await self._check_switched(circuit, attrs.get("preset_mode"), active, now)
                 links = self.topology.rooms_on_circuit(circuit)
-                needs = [
-                    room_need(l, room_temperature(l, self.states), self.schedules.get(l.room_id, []), now_dt,
-                              is_open=is_open, hysteresis=opts.hysteresis, frost_temp=opts.frost_temp)
-                    for l in links
-                ]
+                needs = [self._room_need(l, circuit, now, now_dt, is_open, outdoor) for l in links]
                 est = by_circuit.get(circuit)
                 pre_t = room_temperature(self.topology.link(est["room"]), self.states) if est else None
                 d = decide_circuit(circuit, boiler.id, needs, est, now, is_open=is_open,
                                    hysteresis=opts.hysteresis, preheat_temp=pre_t)
+                d = self._experiment(circuit, d, active, now)
+                await self._track_preheat(circuit, d, est, pre_t, is_open, now)
                 if d.open != is_open:
                     last = self.control.last_switch(circuit)
                     if last and now - last < opts.min_switch_minutes * 60 and d.reason != "frost":
@@ -319,8 +393,8 @@ class Portal:
                                             {"preset_mode": OPEN_PRESET if d.open else CLOSED_PRESET}, d, now)
                 if active:
                     heat_rooms = {n.room for n in needs if n.heat}
-                    if d.reason == "preheat":
-                        heat_rooms.add(est["room"])
+                    if d.reason in ("preheat", "test_a") and d.detail:
+                        heat_rooms.add(d.detail)
                     for l in links:
                         if not l.valve or l.valve not in self.states:
                             continue
@@ -329,6 +403,151 @@ class Portal:
                             await self._command(l.valve, "switch", "turn_on" if want else "turn_off", {}, d, now)
                 self.decisions[circuit] = d
         await self._heartbeat(now)
+
+    def _room_need(self, link, circuit: str, now: int, now_dt: datetime, is_open: bool, outdoor: float | None):
+        """A room's need, with its coast time (from tau) and its setback floor before the next event."""
+        opts = self.options
+        temp = room_temperature(link, self.states)
+        events = self.schedules.get(link.room_id, [])
+        m = model_for(circuit, link.room_id, *self.models)
+        coast = coast_minutes(temp, outdoor, m.tau_h, opts.coast_drop, opts.max_coast_minutes)
+        floor = None
+        nxt = next((e for e in events if not e["all_day"] and datetime.fromisoformat(e["start"]).timestamp() > now), None)
+        if link.category == "event" and nxt is not None:
+            start = datetime.fromisoformat(nxt["start"]).timestamp()
+            if start - now <= opts.setback_horizon_hours * 3600:
+                fc = self._outdoor_at(int(start) - int(opts.max_preheat_hours * 3600), int(start))
+                floor = setback_floor(m, float(event_target(nxt, link)), fc if fc is not None else outdoor,
+                                      opts.frost_temp, opts.max_preheat_hours)
+        return room_need(link, temp, events, now_dt, is_open=is_open, hysteresis=opts.hysteresis,
+                         frost_temp=opts.frost_temp, coast_min=coast, floor=floor)
+
+    def _experiment(self, circuit: str, d: Decision, active: bool, now: int) -> Decision:
+        """A scheduled test overrides the decision (frost protection excepted)."""
+        exp = self.control.experiment(circuit)
+        if not exp or now < exp["start"]:
+            return d
+        if not active:
+            self.control.finish_experiment(circuit, exp, "aborted: boiler not active")
+            return d
+        if d.reason in ("preheat", "event", "event_no_sensor", "setback", "coast"):
+            self.control.finish_experiment(circuit, exp, f"aborted: {d.reason.replace('_', ' ')}")
+            asyncio.create_task(self._notify(f"test_{circuit}", "Heating test stopped",
+                                             f"The test on {circuit} stopped: the circuit is needed ({d.reason})."))
+            return d
+        temp = room_temperature(self.topology.link(exp["room"]), self.states)
+        exp, want = experiment_step(exp, temp, now)
+        if exp.get("phase") == "done":
+            self.control.finish_experiment(circuit, exp, "done")
+            return d
+        self.control.set_experiment(circuit, exp)
+        if want is None or d.reason == "frost":
+            return d
+        return Decision(circuit, d.boiler, want, "test_a" if exp["phase"] == "A" else "test_b", exp["room"], d.rooms)
+
+    async def _track_preheat(self, circuit: str, d: Decision, est: dict | None, temp: float | None, is_open: bool, now: int) -> None:
+        """While preheating, project when the room reaches its target; warn once if it will be late."""
+        if d.reason not in ("preheat", "preheat_warm") or not est:
+            self._preheat.pop(circuit, None)
+            return
+        plan = self._preheat.get(circuit)
+        if plan is None or plan["event_start"] != est["event_start"]:
+            if not is_open:
+                return
+            plan = self._preheat[circuit] = {"event_start": est["event_start"], "opened": now, "t0": temp,
+                                             "rate": est["rate"], "dead_min": est["dead_min"], "target": est["target"],
+                                             "room": est["room"], "warned": False}
+        if temp is None:
+            d.progress = {"status": "no_sensor"}
+            return
+        elapsed = (now - plan["opened"]) / 60
+        rate = plan["rate"]
+        if elapsed > plan["dead_min"] + 20 and plan["t0"] is not None and temp > plan["t0"]:
+            rate = min(rate, (temp - plan["t0"]) / ((elapsed - plan["dead_min"]) / 60))  # what the room really does
+        rest = max(0.0, plan["dead_min"] - elapsed) + max(0.0, plan["target"] - temp) / max(rate, 0.1) * 60
+        arrival = int(now + rest * 60)
+        late = arrival > plan["event_start"] + self.options.late_margin_minutes * 60
+        d.progress = {"status": "late" if late else "on_track", "arrival": arrival, "rate": round(rate, 2)}
+        if late and not plan["warned"]:
+            plan["warned"] = True
+            name = self.rooms[plan["room"]].name if plan["room"] in self.rooms else plan["room"]
+            when = datetime.fromtimestamp(arrival, self.tz).strftime("%H:%M")
+            await self._notify(f"late_{circuit}_{plan['event_start']}", "Preheating is late",
+                               f"{name} will reach {plan['target']} °C around {when}, after the event starts "
+                               f"({datetime.fromtimestamp(plan['event_start'], self.tz).strftime('%H:%M')}).")
+
+    async def _check_switched(self, circuit: str, preset: str | None, active: bool, now: int) -> None:
+        sent = self._pending_switch.get(circuit)
+        if not sent:
+            return
+        if preset == sent[0]:
+            self._pending_switch.pop(circuit, None)
+        elif active and now - sent[1] >= SWITCH_CONFIRM_S:
+            self._pending_switch.pop(circuit, None)
+            await self._notify(f"switch_{circuit}", "Circuit did not switch",
+                               f"{circuit} was set to {sent[0]} {round((now - sent[1]) / 60)} min ago but reports {preset}.")
+
+    async def _publish_circuit_sensors(self, estimates: dict) -> None:
+        by_circuit = {c["circuit"]: c for c in estimates["circuits"]}
+        for boiler in self.topology.boilers:
+            mode = self.control.boiler(boiler.id)["mode"]
+            for circuit in boiler.circuits:
+                obj = circuit.split(".", 1)[1]
+                e = (by_circuit.get(circuit) or {}).get("estimate")
+                d = self.decisions.get(circuit)
+                rows = [
+                    (f"sensor.heating_{obj}_next_start", e and datetime.fromtimestamp(e["start"], self.tz).isoformat(),
+                     {"device_class": "timestamp", "friendly_name": f"{boiler.name} next heating start", "icon": "mdi:radiator",
+                      "circuit": circuit, "room": e and e["room"], "event_summary": e and e["event_summary"],
+                      "event_start": e and datetime.fromtimestamp(e["event_start"], self.tz).isoformat(),
+                      "lead_minutes": e and e["lead_min"], "confidence": e and e["confidence"]}),
+                    (f"sensor.heating_{obj}_decision", d and ("open" if d.open else "closed"),
+                     {"friendly_name": f"{boiler.name} heating decision", "icon": "mdi:valve", "circuit": circuit, "mode": mode,
+                      "reason": d and d.reason, "detail": d and d.detail, "held": d and d.held,
+                      "late": bool(d and d.progress and d.progress.get("status") == "late")}),
+                ]
+                for entity_id, state, attrs in rows:
+                    state = state or "unknown"
+                    key = (state, tuple(sorted((k, str(v)) for k, v in attrs.items())))
+                    if self._published.get(entity_id) == key:
+                        continue
+                    try:
+                        await self.ha.set_state(entity_id, state, attrs)
+                        self._published[entity_id] = key
+                    except Exception as err:  # noqa: BLE001
+                        _LOGGER.warning("Cannot publish %s: %s", entity_id, err)
+
+    def schedule_experiment(self, circuit: str, data: dict, client: str = "admin") -> dict:
+        boiler = self.topology.boiler_of_circuit(circuit)
+        if boiler is None:
+            raise KeyError(circuit)
+        if self.control.boiler(boiler.id)["mode"] != "active":
+            raise ValueError("Set the boiler to Active first: a test switches the circuit")
+        room = data.get("room") or next((l.room_id for l in self.topology.rooms_on_circuit(circuit) if l.temperature), None)
+        if not room or not (self.topology.link(room) and self.topology.link(room).temperature):
+            raise ValueError("The test needs a room with a temperature sensor on this circuit")
+        try:
+            exp = {"start": int(data["start"]), "rise": float(data.get("rise", 3)), "max_hours": float(data.get("max_hours", 4)),
+                   "cool_hours": float(data.get("cool_hours", 8)), "room": room, "phase": "wait"}
+        except (KeyError, TypeError, ValueError):
+            raise ValueError("start (epoch seconds), rise, max_hours and cool_hours must be numbers")
+        if not (0.5 <= exp["rise"] <= 10 and 0.5 <= exp["max_hours"] <= 12 and 0 <= exp["cool_hours"] <= 24):
+            raise ValueError("rise 0.5-10 °C, max_hours 0.5-12, cool_hours 0-24")
+        end = exp["start"] + (exp["max_hours"] + exp["cool_hours"]) * 3600
+        for l in self.topology.rooms_on_circuit(circuit):
+            for ev in self.schedules.get(l.room_id, []):
+                if not ev["all_day"] and datetime.fromisoformat(ev["start"]).timestamp() - self.fixed_lead_minutes(self.rooms[l.room_id]) * 60 < end \
+                        and datetime.fromisoformat(ev["end"]).timestamp() > exp["start"]:
+                    raise ValueError(f"{self.rooms[l.room_id].name} has '{ev['summary']}' during the test")
+        self.control.set_experiment(circuit, exp)
+        self.audit.write(action="test_scheduled", client=client, entity=circuit, new=exp["start"], room=room)
+        return exp
+
+    def cancel_experiment(self, circuit: str, client: str = "admin") -> None:
+        exp = self.control.experiment(circuit)
+        if exp:
+            self.control.finish_experiment(circuit, exp, "cancelled")
+            self.audit.write(action="test_cancelled", client=client, entity=circuit)
 
     async def _command(self, entity_id: str, domain: str, service: str, data: dict, d: Decision, now: int) -> None:
         try:
@@ -339,6 +558,7 @@ class Portal:
             return
         if domain == "climate":
             self.control.switched(entity_id, now)
+            self._pending_switch[entity_id] = (data.get("preset_mode"), now)
         self.audit.write(action="control", client="controller", entity=entity_id, new=data.get("preset_mode") or service,
                          reason=d.reason, detail=d.detail)
 
@@ -388,7 +608,9 @@ class Portal:
                 d = self.decisions.get(c)
                 circuits.append({"entity_id": c, "name": self._entity_names.get(c) or attrs.get("friendly_name") or c,
                                  "preset_mode": attrs.get("preset_mode"), "last_switch": self.control.last_switch(c),
-                                 "decision": d.as_dict() if d else None})
+                                 "decision": d.as_dict() if d else None, "experiment": self.control.experiment(c),
+                                 "rooms": [{"room": l.room_id, "name": self.rooms[l.room_id].name if l.room_id in self.rooms else l.room_id,
+                                            "sensor": l.temperature} for l in self.topology.rooms_on_circuit(c)]})
             boilers.append({"id": b.id, "name": b.name, **cfg, "circuits": circuits})
         automations = sorted(
             ({"entity_id": e, "name": (st.get("attributes") or {}).get("friendly_name") or e, "state": st.get("state")}
@@ -397,7 +619,10 @@ class Portal:
         )
         o = self.options
         return {"boilers": boilers, "automations": automations, "heartbeat": HEARTBEAT_ENTITY,
-                "settings": {"frost_temp": o.frost_temp, "hysteresis": o.hysteresis, "min_switch_minutes": o.min_switch_minutes}}
+                "experiment_log": list(reversed(self.control.data.get("experiment_log", [])[-20:])),
+                "settings": {"frost_temp": o.frost_temp, "hysteresis": o.hysteresis, "min_switch_minutes": o.min_switch_minutes,
+                             "coast_drop": o.coast_drop, "max_coast_minutes": o.max_coast_minutes,
+                             "max_preheat_hours": o.max_preheat_hours, "setback_horizon_hours": o.setback_horizon_hours}}
 
     def _save_estimates(self, data: dict, now: int) -> None:
         for c in data["circuits"]:
@@ -418,7 +643,7 @@ class Portal:
     def estimates(self, now: int | None = None) -> dict:
         """Shadow estimates: when each circuit should open for its rooms' next events. Nothing is switched."""
         now = int(now if now is not None else time.time())
-        outdoor = _float((self.states.get(self.options.outdoor_sensor) or {}).get("state")) if self.options.outdoor_sensor else None
+        outdoor = self.outdoor_now()
         plans, unlinked = [], []
         for room_id, link in self.topology.links.items():
             room = self.rooms.get(room_id)
@@ -443,7 +668,7 @@ class Portal:
                 event_end=int(datetime.fromisoformat(ev["end"]).timestamp()),
                 target=float(target),
                 t_now=t_now if t_now is not None else self.options.setback_temp,
-                fixed_lead_min=self.lead_minutes(room),
+                fixed_lead_min=self.fixed_lead_minutes(room),
                 assumed_temp=t_now is None,
             )
             plan = next((p for p in plans if p.circuit == link.circuit), None)
@@ -452,7 +677,8 @@ class Portal:
                 plan = CircuitPlan(link.circuit, boiler.id if boiler else None)
                 plans.append(plan)
             plan.candidates.append(cand)
-        circuits = plan_circuits(plans, self.models, outdoor, now)
+        circuits = plan_circuits(plans, self.models, outdoor, now, self._outdoor_at if self.forecast else None)
+        self.room_leads = {e["room"]: int(e["lead_min"]) for c in circuits for e in c["rooms"]}
         names = {r: self.rooms[r].name for r in self.rooms}
         for c in circuits:
             b = self.topology.boiler(c["boiler"])
@@ -464,7 +690,11 @@ class Portal:
             if c["estimate"]:
                 c["estimate"]["room_name"] = names.get(c["estimate"]["room"], c["estimate"]["room"])
         circuits.sort(key=lambda c: c["estimate"]["start"] if c["estimate"] else 0)
-        return {"now": now, "outdoor": outdoor, "circuits": circuits, "unlinked": sorted(unlinked, key=lambda u: u["event_start"])}
+        for c in circuits:
+            for e in c["rooms"]:
+                e["room_name"] = names.get(e["room"], e["room"])
+        return {"now": now, "outdoor": outdoor, "forecast": bool(self.forecast), "lead_mode": self.lead_mode(),
+                "circuits": circuits, "unlinked": sorted(unlinked, key=lambda u: u["event_start"])}
 
     def update_link(self, room_id: str, values: dict, client: str = "admin"):
         link = self.topology.update_room(room_id, values)
@@ -532,14 +762,56 @@ class Portal:
         await asyncio.gather(*(self.refresh_schedule(r) for r in list(self.rooms)), return_exceptions=True)
 
     def lead_source(self, room: Room) -> str:
-        """Where the room's lead time comes from: "room" (set for this room) or "all" (the all-rooms value)."""
+        """Where the room's lead time comes from: "estimated", "room" (set for this room) or "all"."""
+        if self.lead_mode() == "estimated" and room.id in self.room_leads:
+            return "estimated"
         return "room" if isinstance((self.room_settings.get(room.id) or {}).get("lead_minutes"), int) else "all"
+
+    def lead_mode(self) -> str:
+        """"estimated": preconditioning uses the learned lead of each room's next event; "fixed": the set lead time."""
+        return (self.room_settings.get(ALL_ROOMS) or {}).get("lead_mode") or "fixed"
+
+    async def set_lead_mode(self, mode: str, client: str = "admin") -> str:
+        if mode not in ("fixed", "estimated"):
+            raise ValueError("bad lead mode")
+        old = self.lead_mode()
+        self.room_settings.update(ALL_ROOMS, lead_mode=mode)
+        self.audit.write(room="all", action="lead_mode", client=client, old=old, new=mode)
+        await self._apply_leads(force=True)
+        return mode
+
+    async def _apply_leads(self, force: bool = False) -> None:
+        """Recompute every event's precondition start from the current lead (fixed or estimated)."""
+        if self.lead_mode() != "estimated" and not force:
+            return
+        for rid, events in self.schedules.items():
+            room = self.rooms.get(rid)
+            if room is None:
+                continue
+            lead = self.lead_minutes(room)
+            changed = False
+            for ev in events:
+                if ev["all_day"]:
+                    continue
+                pre = (datetime.fromisoformat(ev["start"]) - timedelta(minutes=lead)).isoformat()
+                if ev["precondition_start"] != pre:
+                    ev["precondition_start"], ev["lead_minutes"], changed = pre, lead, True
+            if changed:
+                await self._publish_precondition_sensor(room)
+                self.broadcast(rid, {"type": "room", "room": self.snapshot(rid)})
 
     def default_lead_minutes(self) -> int:
         saved = (self.room_settings.get(ALL_ROOMS) or {}).get("lead_minutes")
         return saved if isinstance(saved, int) else DEFAULT_LEAD_MINUTES
 
     def lead_minutes(self, room: Room) -> int:
+        """The lead used for preconditioning: the estimated one when the lead mode is "estimated" and the
+        room has an estimate, else the fixed one."""
+        if self.lead_mode() == "estimated" and room.id in self.room_leads:
+            return self.room_leads[room.id]
+        return self.fixed_lead_minutes(room)
+
+    def fixed_lead_minutes(self, room: Room) -> int:
         """Pre-heat/pre-cool lead before each event, set on the admin page. Calendar events never
         carry one: the room's own value wins, else the value for all rooms (120 min out of the box)."""
         saved = (self.room_settings.get(room.id) or {}).get("lead_minutes")

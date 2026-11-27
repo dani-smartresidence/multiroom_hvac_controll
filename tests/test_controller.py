@@ -87,3 +87,44 @@ def test_control_store(tmp_path):
         store.set_boiler("sala_plen", "on")
     with pytest.raises(ValueError):
         store.set_boiler("sala_plen", takeover=["script.x"])
+
+
+def test_room_need_coast_and_setback():
+    running = [event(10, 11)]  # ends at 11:00, NOW is 10:30
+    link = RoomLink("sala", circuit="climate.sala_plen1")
+    n = room_need(link, 21.0, running, NOW, is_open=True, hysteresis=0.3, frost_temp=10.0, coast_min=40)
+    assert not n.heat and n.reason == "coast"
+    cold = room_need(link, 19.5, running, NOW, is_open=True, hysteresis=0.3, frost_temp=10.0, coast_min=40)
+    assert cold.heat and cold.reason == "event"  # 1 °C under target: keeps heating
+    later = [event(14, 16)]
+    s = room_need(link, 13.0, later, NOW, is_open=False, hysteresis=0.3, frost_temp=10.0, floor=14.0)
+    assert s.heat and s.reason == "setback" and s.floor == 14.0
+    assert not room_need(link, 14.5, later, NOW, is_open=False, hysteresis=0.3, frost_temp=10.0, floor=14.0).heat
+    assert decide([s]).reason == "setback" and decide([s]).open
+    assert decide([n]).reason == "coast" and not decide([n]).open
+
+
+def test_experiment_phases():
+    from portal.controller import experiment_step
+    exp = {"start": 1000, "rise": 3.0, "max_hours": 4, "cool_hours": 8, "room": "sala", "phase": "wait"}
+    assert experiment_step(exp, 15.0, 999)[1] is None
+    exp, want = experiment_step(exp, 15.0, 1000)
+    assert want is True and exp["phase"] == "A" and exp["t0"] == 15.0
+    exp, want = experiment_step(exp, 17.9, 1000 + 3600)
+    assert want is True
+    exp, want = experiment_step(exp, 18.0, 1000 + 7200)
+    assert want is False and exp["phase"] == "B" and exp["a_end_reason"] == "risen"
+    exp, want = experiment_step(exp, 16.0, 1000 + 7200 + 8 * 3600)
+    assert want is None and exp["phase"] == "done"
+    timeout = experiment_step(dict(exp, phase="A", a_start=0, t0=15.0), 15.5, 4 * 3600)[0]
+    assert timeout["phase"] == "B" and timeout["a_end_reason"] == "max_hours"
+
+
+def test_experiment_notes(tmp_path):
+    store = ControlStore(tmp_path / "control.json")
+    store.set_experiment("c1", {"start": 0, "phase": "B", "a_start": 1000, "b_start": 5000, "max_hours": 4, "cool_hours": 8, "room": "r"})
+    assert store.experiment_note("c1", 1000, 5000) == "Test A"
+    assert store.experiment_note("c1", 5000, 20000) == "Test B"
+    assert store.experiment_note("c2", 1000, 5000) is None
+    store.finish_experiment("c1", store.experiment("c1"), "done")
+    assert store.experiment("c1") is None and store.experiment_note("c1", 1000, 5000) == "Test A"

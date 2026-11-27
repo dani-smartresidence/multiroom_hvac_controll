@@ -685,3 +685,83 @@ async def test_control_shadow_then_active(env):
     assert portal.control.boiler("sala_plen")["mode"] == "shadow"
     assert (await admin.post("/api/control/boilers/nope", json={"mode": "active"})).status == 404
     assert (await admin.post("/api/control/boilers/sala_plen", json={"mode": "maybe"})).status == 400
+
+
+async def test_forecast_sensors_notifications_and_lead_mode(env):
+    fake, portal, _, admin = env
+    portal.options.weather_entity = "weather.home"
+    await admin.post("/api/plant/rooms/camera_204", json={"circuit": "climate.sala_plen1", "temperature": "sensor.camera_101_temperature"})
+    await admin.post("/api/plant/rooms/camera_101", json={"circuit": "climate.parter1", "temperature": "sensor.missing"})
+    await portal.log_tick()
+    await asyncio.sleep(0.2)
+    d = await (await admin.get("/api/estimates")).json()
+    assert d["forecast"] and d["circuits"][0]["estimate"]["outdoor"] == -2.0
+    nxt = fake.published["sensor.heating_sala_plen1_next_start"]
+    assert nxt["attributes"]["room"] == "camera_204" and nxt["state"] != "unknown"
+    assert fake.published["sensor.heating_sala_plen1_decision"]["attributes"]["mode"] == "shadow"
+    assert any("Camera 101" in n["message"] for n in fake.notifications)  # sensor.missing is offline
+    n = len(fake.notifications)
+    await portal.log_tick()
+    assert len(fake.notifications) == n  # not repeated within the cooldown
+
+    # Preconditioning follows the estimated start.
+    fixed = fake.published["sensor.camera_204_next_precondition"]["attributes"]["lead_minutes"]
+    r = await admin.post("/api/lead_mode", json={"mode": "estimated"})
+    assert (await r.json())["lead_mode"] == "estimated"
+    await asyncio.sleep(0.2)
+    lead = fake.published["sensor.camera_204_next_precondition"]["attributes"]["lead_minutes"]
+    assert fixed == 120 and lead == portal.room_leads["camera_204"] and lead != 120
+    rooms = await (await admin.get("/api/rooms")).json()
+    assert next(x for x in rooms if x["id"] == "camera_204")["lead_source"] == "estimated"
+    await admin.post("/api/lead_mode", json={"mode": "fixed"})
+    await asyncio.sleep(0.2)
+    assert fake.published["sensor.camera_204_next_precondition"]["attributes"]["lead_minutes"] == 120
+    assert (await admin.post("/api/lead_mode", json={"mode": "sometimes"})).status == 400
+
+
+async def test_experiment_runs_and_labels_runs(env, monkeypatch):
+    fake, portal, _, admin = env
+    monkeypatch.setattr("portal.sessions.MIN_HEAT_S", 0)
+    # Parter circuit with room 101 (its event is tomorrow afternoon).
+    await admin.post("/api/plant/rooms/camera_101", json={"circuit": "climate.parter1"})
+    now = int(time.time())
+    r = await admin.post("/api/control/experiments/climate.parter1", json={"start": now})
+    assert r.status == 400 and "Active" in (await r.json())["error"]
+    await admin.post("/api/control/boilers/parter", json={"mode": "active"})
+    r = await admin.post("/api/control/experiments/climate.parter1", json={"start": now + 2 * 86400})
+    assert r.status == 400 and "during the test" in (await r.json())["error"]  # tomorrow's check-in overlaps
+    r = await admin.post("/api/control/experiments/climate.parter1", json={"start": now, "rise": 1, "max_hours": 1, "cool_hours": 0.5})
+    assert r.status == 200
+    await portal.log_tick(now)
+    await asyncio.sleep(0.2)
+    assert portal.decisions["climate.parter1"].reason == "test_a"
+    assert fake.states["climate.parter1"]["attributes"]["preset_mode"] == "Winter"
+    await fake.set_state("sensor.camera_101_temperature", "18.1", {"device_class": "temperature"})
+    await asyncio.sleep(0.1)
+    await portal.log_tick(now + 11 * 60)
+    await asyncio.sleep(0.2)
+    assert portal.decisions["climate.parter1"].reason == "test_b"
+    assert fake.states["climate.parter1"]["attributes"]["preset_mode"] == "Summer"
+    await portal.log_tick(now + 11 * 60 + 1800)  # finalizes the heat run of test A and ends the test
+    rows = await (await admin.get("/api/sessions")).json()
+    assert rows and rows[0]["kind"] == "heat" and rows[0]["note"] == "Test A"
+    view = await (await admin.get("/api/control")).json()
+    assert view["experiment_log"][0]["status"] == "done"
+    assert next(c for b in view["boilers"] for c in b["circuits"] if c["entity_id"] == "climate.parter1")["experiment"] is None
+
+
+async def test_late_preheat_is_reported_once(env):
+    fake, portal, _, admin = env
+    # camera_204's event starts in 29 min; at 17 °C for a 22 °C target the default model needs hours.
+    await admin.post("/api/plant/rooms/camera_204", json={"circuit": "climate.sala_plen1", "temperature": "sensor.camera_101_temperature"})
+    zone = fake.states["climate.sala_plen1"]
+    await fake.set_state("climate.sala_plen1", "heat", dict(zone["attributes"], preset_mode="Winter"))
+    await asyncio.sleep(0.1)
+    await portal.log_tick()
+    d = portal.decisions["climate.sala_plen1"]
+    assert d.reason == "preheat" and d.progress["status"] == "late"
+    assert fake.published["sensor.heating_sala_plen1_decision"]["attributes"]["late"] is True
+    late = [n for n in fake.notifications if n.get("title") == "Preheating is late"]
+    assert len(late) == 1 and "Camera 204" in late[0]["message"]
+    await portal.log_tick()
+    assert len([n for n in fake.notifications if n.get("title") == "Preheating is late"]) == 1
