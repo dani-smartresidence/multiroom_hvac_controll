@@ -27,6 +27,9 @@ room_climate_portal/                 the add-on
     rooms.py     Area/label discovery + rooms.yaml overrides
     schedule.py  calendar events -> precondition start times
     core.py      state cache, live fan-out, setpoint rules, published sensors
+    topology.py  boilers, circuits and room links (Plant tab)
+    datalog.py   SQLite heating log (/data/heating.db)
+    sessions.py  heating / cooling runs measured per room
     web.py       guest server (:8080) and admin server (Ingress :8099)
     static/      guest page (RO/EN, light/dark) and admin page
 blueprints/automation/room_precondition.yaml
