@@ -96,7 +96,7 @@ class Portal:
         self.topology = Topology(paths.topology)
         self.datalog = DataLog(paths.heating_db)
         self.datalog.rename_circuits(RENAMED_CIRCUITS)
-        self._entity_names: dict[str, str] = {}  # entity registry names, e.g. "SalaMare1"
+        self._entity_names: dict[str, str] = {}  # names set by the user in the entity registry
         self.sessions = SessionTracker(self.datalog, self.topology, options.default_target_temp)
         self._plant_index: dict[str, list[tuple[str, str | None]]] = {}  # entity -> [(kind, room/circuit)]
         self.models = fit_models(self.datalog.sessions(limit=MODEL_SESSIONS))
@@ -154,7 +154,7 @@ class Portal:
         if self.options.outdoor_sensor:
             index[self.options.outdoor_sensor].update(self.rooms)
         self._entity_rooms = dict(index)
-        self._entity_names = {e["entity_id"]: e.get("name") or e.get("original_name") for e in entities if e.get("name") or e.get("original_name")}
+        self._entity_names = {e["entity_id"]: e["name"] for e in entities if e.get("name")}
         members: dict[str, list[str]] = defaultdict(list)
         dev_by_id = {d["id"]: d for d in devices}
         for entry in entities:

@@ -160,8 +160,8 @@ pick "–" to go back to the guess. **Heating** sets whether a room follows cale
 protection, or is not heated at all.
 
 Boilers are created on first start and saved in `/data/topology.json`. Only the first circuit of each
-boiler is used: `climate.salamare1`, `climate.parter1`, `climate.etaj1` and `climate.demisol1`. The add-on
-shows each circuit under its name from the entity registry (SalaMare1 and so on).
+boiler is used: `climate.sala_plen1`, `climate.parter1`, `climate.etaj1` and `climate.demisol1`. The add-on
+shows each circuit under its name in HA (a name you set in the entity registry wins).
 A circuit counts as open while its preset is `Winter` or its `heat_request` is above 0.
 
 The add-on records the room temperatures, the outdoor temperature (`outdoor_sensor`), every circuit and

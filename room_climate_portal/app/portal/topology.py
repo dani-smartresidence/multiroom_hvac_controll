@@ -19,14 +19,15 @@ OPEN_PRESETS = ("Winter",)
 # The Vox Domini plant: only the first circuit of each boiler is used. Only circuits that exist in HA
 # are kept, so other sites start empty and fill /data/topology.json by hand.
 DEFAULT_BOILERS = [
-    {"id": "sala_plen", "name": "Sala Plen", "circuits": ["climate.salamare1"]},
+    {"id": "sala_plen", "name": "Sala Plen", "circuits": ["climate.sala_plen1"]},
     {"id": "parter", "name": "Parter", "circuits": ["climate.parter1"]},
     {"id": "etaj_1", "name": "Etaj 1", "circuits": ["climate.etaj1"]},
     {"id": "demisol", "name": "Demisol", "circuits": ["climate.demisol1"]},
 ]
 # Entity ids before the boilers' first circuits were renamed in HA (0.14.0).
 RENAMED_CIRCUITS = {
-    "climate.zone1": "climate.salamare1",
+    "climate.zone1": "climate.sala_plen1",
+    "climate.salamare1": "climate.sala_plen1",  # interim id for a few minutes on 2026-11-27
     "climate.zone2": "climate.parter1",
     "climate.etaj_1": "climate.etaj1",
     "climate.ariston_b4bfe94a5d38_1": "climate.demisol1",

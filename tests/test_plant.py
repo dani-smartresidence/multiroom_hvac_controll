@@ -17,12 +17,12 @@ def circuit(preset="Summer", heat_request=0.0):
 
 
 STATES = {
-    "climate.salamare1": circuit(),
+    "climate.sala_plen1": circuit(),
     "climate.etaj1": circuit(),
     "climate.zone1_2": circuit(),  # second circuits stay in HA but are not used
 }
 # Two circuits on one boiler, to test how they share its power.
-TWO_CIRCUITS = {"boilers": [{"id": "sala_plen", "name": "Sala Plen", "circuits": ["climate.salamare1", "climate.zone1_2"]},
+TWO_CIRCUITS = {"boilers": [{"id": "sala_plen", "name": "Sala Plen", "circuits": ["climate.sala_plen1", "climate.zone1_2"]},
                             {"id": "etaj_1", "name": "Etaj 1", "circuits": ["climate.etaj1"]}], "rooms": {}}
 
 
@@ -54,7 +54,7 @@ def test_circuit_open():
 
 def test_seed_keeps_only_existing_first_circuits(tmp_path):
     topo = make_topology(tmp_path)
-    assert [(b.id, b.circuits) for b in topo.boilers] == [("sala_plen", ["climate.salamare1"]), ("etaj_1", ["climate.etaj1"])]
+    assert [(b.id, b.circuits) for b in topo.boilers] == [("sala_plen", ["climate.sala_plen1"]), ("etaj_1", ["climate.etaj1"])]
     assert (tmp_path / "topology.json").exists()
 
 
@@ -68,9 +68,9 @@ def test_migrates_old_three_circuit_seed(tmp_path):
     }
     (tmp_path / "topology.json").write_text(json.dumps(old))
     topo = Topology(tmp_path / "topology.json")
-    assert [(b.id, b.circuits) for b in topo.boilers] == [("sala_plen", ["climate.salamare1"]), ("demisol", ["climate.demisol1"])]
+    assert [(b.id, b.circuits) for b in topo.boilers] == [("sala_plen", ["climate.sala_plen1"]), ("demisol", ["climate.demisol1"])]
     saved = json.loads((tmp_path / "topology.json").read_text())
-    assert saved["rooms"] == {"a": {"circuit": "climate.salamare1", "category": "event"}, "b": {}}
+    assert saved["rooms"] == {"a": {"circuit": "climate.sala_plen1", "category": "event"}, "b": {}}
     assert Topology(tmp_path / "topology.json").boilers == topo.boilers  # idempotent
 
 
@@ -86,10 +86,10 @@ def test_guesses_from_area(tmp_path):
 
 def test_update_room_links_and_resets(tmp_path):
     topo = make_topology(tmp_path)
-    link = topo.update_room("sala_mare", {"circuit": "climate.salamare1", "comfort": "21"})
-    assert link.boiler == "sala_plen" and link.circuit == "climate.salamare1" and link.comfort == 21.0
+    link = topo.update_room("sala_mare", {"circuit": "climate.sala_plen1", "comfort": "21"})
+    assert link.boiler == "sala_plen" and link.circuit == "climate.sala_plen1" and link.comfort == 21.0
     assert "circuit" not in link.guessed
-    assert [l.room_id for l in topo.rooms_on_circuit("climate.salamare1")] == ["sala_mare"]
+    assert [l.room_id for l in topo.rooms_on_circuit("climate.sala_plen1")] == ["sala_mare"]
     # Another boiler: its old circuit no longer applies.
     link = topo.update_room("sala_mare", {"boiler": "etaj_1"})
     assert link.boiler == "etaj_1" and link.circuit is None
@@ -199,18 +199,18 @@ def test_n_open_weighted():
 
 def test_tracker_measures_a_heat_run(tmp_path):
     topo = make_topology(tmp_path, TWO_CIRCUITS)
-    topo.update_room("sala_mare", {"circuit": "climate.salamare1", "comfort": 21})
+    topo.update_room("sala_mare", {"circuit": "climate.sala_plen1", "comfort": 21})
     log = DataLog(tmp_path / "h.db")
     tracker = SessionTracker(log, topo, default_target=20.0)
-    tracker.observe("climate.salamare1", False, T0 - 60, 0)  # first sight: baseline only
+    tracker.observe("climate.sala_plen1", False, T0 - 60, 0)  # first sight: baseline only
     assert tracker.runs == {}
     for ts, v in heating_series():
         log.record(room_key("sala_mare"), v, ts)
         log.record("outdoor", 3.0, ts)
-    tracker.observe("climate.salamare1", True, T0, 1)
+    tracker.observe("climate.sala_plen1", True, T0, 1)
     tracker.observe("climate.zone1_2", False, T0 + 5, 1)  # baseline for the second circuit
     tracker.observe("climate.zone1_2", True, T0 + 3600, 2)
-    tracker.observe("climate.salamare1", False, T0 + 4 * 3600, 1)
+    tracker.observe("climate.sala_plen1", False, T0 + 4 * 3600, 1)
     runs = tracker.take_done(T0 + 4 * 3600)
     assert [r.kind for r in runs] == ["heat"]
     ids = tracker.finalize(runs)
@@ -220,21 +220,21 @@ def test_tracker_measures_a_heat_run(tmp_path):
     assert row["target"] == 21 and row["outdoor"] == 3.0
     assert row["n_open_max"] == 2 and row["n_open_avg"] == pytest.approx(1.75)
     assert row["end_reason"] == "closed"
-    assert tracker.runs["climate.salamare1"].kind == "cool"
+    assert tracker.runs["climate.sala_plen1"].kind == "cool"
 
 
 def test_tracker_cuts_long_runs_and_skips_short_ones(tmp_path):
     topo = make_topology(tmp_path, TWO_CIRCUITS)
     log = DataLog(tmp_path / "h.db")
     tracker = SessionTracker(log, topo, default_target=20.0)
-    tracker.observe("climate.salamare1", False, T0, 0)
-    tracker.observe("climate.salamare1", True, T0 + 10, 1)
+    tracker.observe("climate.sala_plen1", False, T0, 0)
+    tracker.observe("climate.sala_plen1", True, T0 + 10, 1)
     runs = tracker.take_done(T0 + 9 * 3600)
-    assert runs[0].end_reason == "max_duration" and tracker.runs["climate.salamare1"].kind == "skip"
+    assert runs[0].end_reason == "max_duration" and tracker.runs["climate.sala_plen1"].kind == "skip"
     assert len(tracker.finalize(runs)) == 1  # no room on the circuit: one row for the circuit itself
-    tracker.observe("climate.salamare1", False, T0 + 10 * 3600, 0)  # closing a skipped run measures nothing
-    tracker.observe("climate.salamare1", True, T0 + 10 * 3600 + 120, 1)  # cool run of 2 minutes
-    tracker.observe("climate.salamare1", False, T0 + 10 * 3600 + 300, 0)  # heat run of 3 minutes
+    tracker.observe("climate.sala_plen1", False, T0 + 10 * 3600, 0)  # closing a skipped run measures nothing
+    tracker.observe("climate.sala_plen1", True, T0 + 10 * 3600 + 120, 1)  # cool run of 2 minutes
+    tracker.observe("climate.sala_plen1", False, T0 + 10 * 3600 + 300, 0)  # heat run of 3 minutes
     assert tracker.finalize(tracker.take_done(T0 + 11 * 3600)) == []
 
 
