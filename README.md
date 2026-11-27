@@ -30,10 +30,12 @@ room_climate_portal/                 the add-on
     topology.py  boilers, circuits and room links (Plant tab)
     datalog.py   SQLite heating log (/data/heating.db)
     sessions.py  heating / cooling runs measured per room
-    model.py     learned start time per circuit (shown only)
+    model.py     learned start time per circuit
+    controller.py switches the circuits (per boiler: shadow or active)
     web.py       guest server (:8080) and admin server (Ingress :8099)
     static/      guest page (RO/EN, light/dark) and admin page
 blueprints/automation/room_precondition.yaml
+blueprints/automation/heating_watchdog.yaml   turns your heating automations back on if the add-on stops
 tests/                               pytest suite + fake HA (tests/fake_ha.py)
 ```
 

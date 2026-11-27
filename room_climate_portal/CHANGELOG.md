@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.15.0
+- **Heating control** on the Plant tab, one card per boiler, **Shadow** (default, shows what it would do) or
+  **Active** (switches the circuit: preset Winter / Summer). A circuit opens for the preheat window from the
+  start estimate, while an event runs in one of its rooms (hysteresis around the target) and for frost protection;
+  at most one switch every `min_switch_minutes`. Room valves follow their room.
+- **Takeover automations** per boiler: Active turns them off, Shadow turns them back on. If one is turned on
+  while the boiler is Active, the add-on goes back to Shadow instead of fighting it.
+- **Heartbeat** `sensor.heating_controller_heartbeat` every minute, and the **watchdog blueprint**
+  `heating_watchdog.yaml`: no heartbeat for 15 minutes turns the takeover automations back on and notifies.
+- New options: `frost_temp` (10 °C), `hysteresis` (0.3 °C), `min_switch_minutes` (10).
+- Admin API: `GET /api/control`, `POST /api/control/boilers/{boiler}`.
+
 ## 0.14.0
 - Only the **first circuit of each boiler** is used, under the entity ids renamed in HA: `climate.zone1` →
   `climate.sala_plen1`, `climate.zone2` → `climate.parter1`, `climate.etaj_1` → `climate.etaj1`,
