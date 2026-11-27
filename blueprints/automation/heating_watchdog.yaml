@@ -1,23 +1,23 @@
 blueprint:
-  name: Heating controller watchdog (Room Climate Portal)
+  name: Watchdog controler încălzire (Room Climate Portal)
   description: >-
-    If the Room Climate Portal add-on stops publishing its heartbeat while it switches boiler circuits,
-    turn the automations it took over back on, so your own heating automations run the building again,
-    and show a notification. The automations are read from the heartbeat. After a Home Assistant restart
-    the heartbeat only comes back once the add-on runs again: if it is still missing after the set
-    minutes, the fallback automations are turned on instead.
+    Dacă add-on-ul Room Climate Portal nu mai publică semnalul de funcționare în timp ce comută
+    circuitele centralelor, repornește automatizările pe care le-a preluat, ca automatizările tale să
+    conducă din nou clădirea, și afișează o notificare. Automatizările se citesc din semnal. După o
+    repornire a Home Assistant semnalul revine doar când rulează din nou add-on-ul: dacă tot lipsește
+    după minutele setate, sunt repornite automatizările de rezervă.
   domain: automation
   source_url: https://github.com/dani-smartresidence/multiroom_hvac_controll/blob/main/blueprints/automation/heating_watchdog.yaml
   input:
     heartbeat:
-      name: Heartbeat sensor
+      name: Senzorul semnalului de funcționare
       default: sensor.heating_controller_heartbeat
       selector:
         entity:
           filter:
             - domain: sensor
     stale_minutes:
-      name: Minutes without a heartbeat
+      name: Minute fără semnal
       default: 15
       selector:
         number:
@@ -25,10 +25,10 @@ blueprint:
           max: 120
           unit_of_measurement: min
     fallback:
-      name: Fallback automations
+      name: Automatizări de rezervă
       description: >-
-        Turned on when the heartbeat is missing altogether after a restart. Pick the same automations
-        as the boilers' takeover automations in the add-on.
+        Repornite când semnalul lipsește complet după o repornire. Alege aceleași automatizări pe care
+        centralele le preiau în add-on.
       default: []
       selector:
         entity:
@@ -75,10 +75,10 @@ actions:
               - action: persistent_notification.create
                 data:
                   notification_id: heating_watchdog
-                  title: Heating controller did not start
+                  title: Controlerul de încălzire nu a pornit
                   message: >-
-                    No heartbeat from the Room Climate Portal add-on {{ stale }} minutes after Home Assistant
-                    started. These automations were turned back on: {{ fallback | join(', ') }}.
+                    Add-on-ul Room Climate Portal nu a dat semn de viață la {{ stale }} minute după pornirea
+                    Home Assistant. Aceste automatizări au fost repornite: {{ fallback | join(', ') }}.
       - conditions:
           - condition: trigger
             id: tick
@@ -93,8 +93,8 @@ actions:
           - action: persistent_notification.create
             data:
               notification_id: heating_watchdog
-              title: Heating controller stopped
+              title: Controlerul de încălzire s-a oprit
               message: >-
-                No heartbeat from the Room Climate Portal add-on since {{ as_timestamp(last) | timestamp_custom('%H:%M') }}.
-                These automations were turned back on: {{ autos | join(', ') }}.
-                Check the add-on, then set its boilers to Active again from the Plant tab.
+                Add-on-ul Room Climate Portal nu a mai dat semn de viață de la {{ as_timestamp(last) | timestamp_custom('%H:%M') }}.
+                Aceste automatizări au fost repornite: {{ autos | join(', ') }}.
+                Verifică add-on-ul, apoi pune din nou centralele pe Activ din tab-ul Instalație.

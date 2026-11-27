@@ -165,11 +165,11 @@ class ControlStore:
         b = self.boiler(boiler_id)
         if mode is not None:
             if mode not in MODES:
-                raise ValueError("bad_mode")
+                raise ValueError("Mod necunoscut: alege Simulare sau Activ")
             b["mode"] = mode
         if takeover is not None:
             if not all(isinstance(a, str) and a.startswith("automation.") for a in takeover):
-                raise ValueError("bad_takeover")
+                raise ValueError("Lista de preluare trebuie să conțină doar automatizări")
             b["takeover"] = sorted(set(takeover))
         self.data["boilers"][boiler_id] = b
         self._save()

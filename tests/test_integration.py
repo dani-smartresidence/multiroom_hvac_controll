@@ -191,7 +191,7 @@ async def test_admin_custom_code(env):
     assert (await guest.get("/camera/api/c204")).status == 200
     assert (await guest.get("/camera/c204")).status == 200
     r = await admin.post("/api/rooms/camera_101/code", json={"code": "C204"})
-    assert r.status == 400 and "already uses" in (await r.json())["error"]
+    assert r.status == 400 and "folosește deja" in (await r.json())["error"]
     r = await admin.post("/api/rooms/camera_204/code", json={"code": None})
     assert not (await r.json())["custom_code"]
     assert (await guest.get("/camera/api/c204")).status == 404
@@ -726,10 +726,10 @@ async def test_experiment_runs_and_labels_runs(env, monkeypatch):
     await admin.post("/api/plant/rooms/camera_101", json={"circuit": "climate.parter1"})
     now = int(time.time())
     r = await admin.post("/api/control/experiments/climate.parter1", json={"start": now})
-    assert r.status == 400 and "Active" in (await r.json())["error"]
+    assert r.status == 400 and "Activ" in (await r.json())["error"]
     await admin.post("/api/control/boilers/parter", json={"mode": "active"})
     r = await admin.post("/api/control/experiments/climate.parter1", json={"start": now + 2 * 86400})
-    assert r.status == 400 and "during the test" in (await r.json())["error"]  # tomorrow's check-in overlaps
+    assert r.status == 400 and "în timpul testului" in (await r.json())["error"]  # tomorrow's check-in overlaps
     r = await admin.post("/api/control/experiments/climate.parter1", json={"start": now, "rise": 1, "max_hours": 1, "cool_hours": 0.5})
     assert r.status == 200
     await portal.log_tick(now)
@@ -761,7 +761,7 @@ async def test_late_preheat_is_reported_once(env):
     d = portal.decisions["climate.sala_plen1"]
     assert d.reason == "preheat" and d.progress["status"] == "late"
     assert fake.published["sensor.heating_sala_plen1_decision"]["attributes"]["late"] is True
-    late = [n for n in fake.notifications if n.get("title") == "Preheating is late"]
+    late = [n for n in fake.notifications if n.get("title") == "Preîncălzirea întârzie"]
     assert len(late) == 1 and "Camera 204" in late[0]["message"]
     await portal.log_tick()
-    assert len([n for n in fake.notifications if n.get("title") == "Preheating is late"]) == 1
+    assert len([n for n in fake.notifications if n.get("title") == "Preîncălzirea întârzie"]) == 1

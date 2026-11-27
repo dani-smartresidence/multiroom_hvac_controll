@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.17.0
+- **Totul în română**: pagina de administrare (tab-urile Camere, Instalație și Jurnal încălzire), foaia de printare,
+  mesajele de eroare, notificările, numele senzorilor publicați în HA, blueprint-ul watchdog, documentația și
+  descrierile opțiunilor (`translations/ro.yaml`). Titlul din bara laterală HA e „Încălzire camere”. Datele și orele
+  sunt în format românesc, cu virgulă zecimală.
+- Pe telefon, cardurile din „Ora estimată de pornire” arată doar următorul eveniment și ora estimată; **Detalii**
+  deschide restul.
+- Butonul **Activ** cere confirmarea într-un dialog din pagină: `confirm()` era blocat în panoul HA și în aplicația
+  mobilă, deci comanda nu putea fi activată de acolo.
+
 ## 0.16.1
 - **Plant and Heating log on phones**: the tables become cards with a label on each value, selects and inputs are full
   width with 16 px text (no zoom on iPhone), the boiler cards stack, buttons are bigger, and charts size to the screen.

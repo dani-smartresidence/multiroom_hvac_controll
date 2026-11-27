@@ -33,6 +33,8 @@ PRUNE_INTERVAL_S = 86400
 MODEL_SESSIONS = 5000
 FORECAST_REFRESH_S = 1800
 SWITCH_CONFIRM_S = 300
+REASON_RO = {"preheat": "preîncălzire", "event": "eveniment", "event_no_sensor": "eveniment fără senzor", "setback": "temperatura minimă",
+             "coast": "oprire anticipată"}
 MAX_LEAD_MINUTES = 600
 DEFAULT_LEAD_MINUTES = 120
 DEFAULT_PRINT_CAPTION = "Scanează- Termostat"
@@ -349,8 +351,8 @@ class Portal:
             and (self.states.get(l.temperature) or {}).get("state") in (None, "unknown", "unavailable")
         )
         if offline:
-            await self._notify("sensors_offline", "Room sensors offline",
-                               "No temperature from: " + ", ".join(offline) + ". These rooms heat without feedback.",
+            await self._notify("sensors_offline", "Senzori de cameră offline",
+                               "Nu primesc temperatura de la: " + ", ".join(offline) + ". Aceste camere se încălzesc fără măsurare.",
                                cooldown_s=24 * 3600, now=now)
 
     # ------------------------------------------------------------------ control
@@ -432,8 +434,8 @@ class Portal:
             return d
         if d.reason in ("preheat", "event", "event_no_sensor", "setback", "coast"):
             self.control.finish_experiment(circuit, exp, f"aborted: {d.reason.replace('_', ' ')}")
-            asyncio.create_task(self._notify(f"test_{circuit}", "Heating test stopped",
-                                             f"The test on {circuit} stopped: the circuit is needed ({d.reason})."))
+            asyncio.create_task(self._notify(f"test_{circuit}", "Test de încălzire oprit",
+                                             f"Testul pe {circuit} s-a oprit: circuitul e necesar ({REASON_RO.get(d.reason, d.reason)})."))
             return d
         temp = room_temperature(self.topology.link(exp["room"]), self.states)
         exp, want = experiment_step(exp, temp, now)
@@ -472,8 +474,8 @@ class Portal:
             plan["warned"] = True
             name = self.rooms[plan["room"]].name if plan["room"] in self.rooms else plan["room"]
             when = datetime.fromtimestamp(arrival, self.tz).strftime("%H:%M")
-            await self._notify(f"late_{circuit}_{plan['event_start']}", "Preheating is late",
-                               f"{name} will reach {plan['target']} °C around {when}, after the event starts "
+            await self._notify(f"late_{circuit}_{plan['event_start']}", "Preîncălzirea întârzie",
+                               f"{name} ajunge la {plan['target']} °C pe la {when}, după începutul evenimentului "
                                f"({datetime.fromtimestamp(plan['event_start'], self.tz).strftime('%H:%M')}).")
 
     async def _check_switched(self, circuit: str, preset: str | None, active: bool, now: int) -> None:
@@ -484,8 +486,8 @@ class Portal:
             self._pending_switch.pop(circuit, None)
         elif active and now - sent[1] >= SWITCH_CONFIRM_S:
             self._pending_switch.pop(circuit, None)
-            await self._notify(f"switch_{circuit}", "Circuit did not switch",
-                               f"{circuit} was set to {sent[0]} {round((now - sent[1]) / 60)} min ago but reports {preset}.")
+            await self._notify(f"switch_{circuit}", "Circuitul nu a comutat",
+                               f"{circuit} a primit {sent[0]} acum {round((now - sent[1]) / 60)} min, dar raportează {preset}.")
 
     async def _publish_circuit_sensors(self, estimates: dict) -> None:
         by_circuit = {c["circuit"]: c for c in estimates["circuits"]}
@@ -497,12 +499,12 @@ class Portal:
                 d = self.decisions.get(circuit)
                 rows = [
                     (f"sensor.heating_{obj}_next_start", e and datetime.fromtimestamp(e["start"], self.tz).isoformat(),
-                     {"device_class": "timestamp", "friendly_name": f"{boiler.name} next heating start", "icon": "mdi:radiator",
+                     {"device_class": "timestamp", "friendly_name": f"{boiler.name} următoarea pornire a încălzirii", "icon": "mdi:radiator",
                       "circuit": circuit, "room": e and e["room"], "event_summary": e and e["event_summary"],
                       "event_start": e and datetime.fromtimestamp(e["event_start"], self.tz).isoformat(),
                       "lead_minutes": e and e["lead_min"], "confidence": e and e["confidence"]}),
                     (f"sensor.heating_{obj}_decision", d and ("open" if d.open else "closed"),
-                     {"friendly_name": f"{boiler.name} heating decision", "icon": "mdi:valve", "circuit": circuit, "mode": mode,
+                     {"friendly_name": f"{boiler.name} decizie încălzire", "icon": "mdi:valve", "circuit": circuit, "mode": mode,
                       "reason": d and d.reason, "detail": d and d.detail, "held": d and d.held,
                       "late": bool(d and d.progress and d.progress.get("status") == "late")}),
                 ]
@@ -522,23 +524,23 @@ class Portal:
         if boiler is None:
             raise KeyError(circuit)
         if self.control.boiler(boiler.id)["mode"] != "active":
-            raise ValueError("Set the boiler to Active first: a test switches the circuit")
+            raise ValueError("Pune întâi centrala pe Activ: testul comută circuitul")
         room = data.get("room") or next((l.room_id for l in self.topology.rooms_on_circuit(circuit) if l.temperature), None)
         if not room or not (self.topology.link(room) and self.topology.link(room).temperature):
-            raise ValueError("The test needs a room with a temperature sensor on this circuit")
+            raise ValueError("Testul are nevoie de o cameră cu senzor de temperatură pe acest circuit")
         try:
             exp = {"start": int(data["start"]), "rise": float(data.get("rise", 3)), "max_hours": float(data.get("max_hours", 4)),
                    "cool_hours": float(data.get("cool_hours", 8)), "room": room, "phase": "wait"}
         except (KeyError, TypeError, ValueError):
-            raise ValueError("start (epoch seconds), rise, max_hours and cool_hours must be numbers")
+            raise ValueError("Începutul, creșterea și duratele trebuie să fie numere")
         if not (0.5 <= exp["rise"] <= 10 and 0.5 <= exp["max_hours"] <= 12 and 0 <= exp["cool_hours"] <= 24):
-            raise ValueError("rise 0.5-10 °C, max_hours 0.5-12, cool_hours 0-24")
+            raise ValueError("Creștere 0,5–10 °C, încălzire 0,5–12 h, răcire 0–24 h")
         end = exp["start"] + (exp["max_hours"] + exp["cool_hours"]) * 3600
         for l in self.topology.rooms_on_circuit(circuit):
             for ev in self.schedules.get(l.room_id, []):
                 if not ev["all_day"] and datetime.fromisoformat(ev["start"]).timestamp() - self.fixed_lead_minutes(self.rooms[l.room_id]) * 60 < end \
                         and datetime.fromisoformat(ev["end"]).timestamp() > exp["start"]:
-                    raise ValueError(f"{self.rooms[l.room_id].name} has '{ev['summary']}' during the test")
+                    raise ValueError(f"{self.rooms[l.room_id].name} are „{ev['summary']}” în timpul testului")
         self.control.set_experiment(circuit, exp)
         self.audit.write(action="test_scheduled", client=client, entity=circuit, new=exp["start"], room=room)
         return exp
@@ -568,7 +570,7 @@ class Portal:
             await self.ha.set_state(
                 HEARTBEAT_ENTITY,
                 datetime.fromtimestamp(now, self.tz).isoformat(),
-                {"device_class": "timestamp", "friendly_name": "Heating controller heartbeat", "icon": "mdi:heart-pulse",
+                {"device_class": "timestamp", "friendly_name": "Semnal de funcționare controler încălzire", "icon": "mdi:heart-pulse",
                  "active_boilers": active,
                  "takeover_automations": sorted({a for b in self.topology.boilers for a in self.control.boiler(b.id)["takeover"]
                                                  if self.control.boiler(b.id)["mode"] == "active"})},
@@ -935,7 +937,7 @@ class Portal:
         state = ev["precondition_start"] if ev else "unknown"
         attrs = {
             "device_class": "timestamp",
-            "friendly_name": f"{room.name} next precondition",
+            "friendly_name": f"{room.name} următoarea preîncălzire",
             "icon": "mdi:thermometer-auto",
             "room": room.id,
             "climate_entity": room.climate,

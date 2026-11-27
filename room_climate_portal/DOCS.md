@@ -1,56 +1,61 @@
 # Room Climate Portal
 
-Each room gets a QR code. Scanning it opens a mobile page (Romanian by default, English on a tap,
-light or dark following the phone) where the occupant sees the live temperature, changes the
-setpoint within limits, and sees the room's upcoming events with the time preconditioning starts
-before each one. Everything comes from Home Assistant; the add-on never keeps its own schedule.
+Fiecare cameră primește un cod QR. Scanat, el deschide o pagină pe telefon (în română, cu engleză la o
+atingere, luminoasă sau întunecată după telefon) unde ocupantul vede temperatura live, schimbă ținta în
+limitele permise și vede evenimentele următoare ale camerei, cu ora la care începe preîncălzirea pentru
+fiecare. Totul vine din Home Assistant; add-on-ul nu ține un program propriu.
 
-## 1. Prepare Home Assistant (once per room)
+Pagina de administrare se deschide din bara laterală HA, la **Încălzire camere**, și are trei tab-uri:
+**Camere** (coduri QR, PIN-uri, termostate), **Instalație** (centrale, circuite, estimări, comanda
+încălzirii) și **Jurnal încălzire** (rulări măsurate, estimat față de realitate).
 
-| What | How |
+## 1. Pregătește Home Assistant (o dată pentru fiecare cameră)
+
+| Ce | Cum |
 | --- | --- |
-| Area | One Area per room (Settings → Areas). Put the label **`qr_room`** on it. |
-| Thermostat | The room's `climate` entity assigned to that Area (directly or through its device). |
-| Calendar | One calendar per room in the Area, e.g. a Local Calendar `calendar.camera_204`. |
-| Lead time | Set on the admin page: **Lead time: all rooms** (120 min out of the box) and, per room, the "Start … min before events" field in the **Calendar & lead time** column. Lead-time helpers in HA are no longer read. |
-| Humidity (optional) | Any humidity sensor in the Area is shown automatically. |
+| Zonă (Area) | O zonă pentru fiecare cameră (Setări → Zone). Pune pe ea eticheta **`qr_room`**. |
+| Termostat | Entitatea `climate` a camerei, asociată acelei zone (direct sau prin dispozitivul ei). |
+| Calendar | Un calendar pentru fiecare cameră în zonă, de exemplu un Local Calendar `calendar.camera_204`. |
+| Preîncălzire | Se setează din administrare: **Preîncălzire: toate camerele** (120 min implicit) și, pe cameră, câmpul „Pornește cu … min înainte de evenimente” din coloana **Calendar și preîncălzire**. Helper-ele de preîncălzire din HA nu mai sunt citite. |
+| Umiditate (opțional) | Orice senzor de umiditate din zonă apare automat. |
 
-An event description may carry one optional line:
+Descrierea unui eveniment poate avea o linie opțională:
 
 ```
-target: 22          # target temperature for this event (else the "Default event target" option)
+target: 22          # temperatura țintă a evenimentului (altfel opțiunea „Ținta implicită a evenimentelor”)
 ```
 
-The calendar does not set the lead time: a `precondition: 60` line in an event is ignored. Change the
-room's lead time on the admin page instead.
+Calendarul nu stabilește preîncălzirea: o linie `precondition: 60` într-un eveniment e ignorată. Schimb-o
+din pagina de administrare.
 
-## 2. Configure the add-on
+## 2. Configurează add-on-ul
 
-- **public_url**: your HA address without a path, e.g. `https://ha.voxdomini.ro`.
-- **base_path**: `/camera` (default). QR codes point to `https://ha.voxdomini.ro/camera/<code>`.
-- **trust_proxy_headers**: turn on when a reverse proxy sits in front (see section 3), so rate limits
-  and PIN lockouts see each phone's real address.
-- **min_temp / max_temp / temp_step**: limits for guests (per-room overrides in `rooms.yaml`).
-- **default_language**: `ro` or `en`.
-- **pin_remember_hours / pin_max_attempts / pin_lockout_minutes**: PIN behaviour (PINs are set on the admin page).
-- **publish_precondition_sensors**: creates `sensor.<area_id>_next_precondition` (timestamp) with
-  the attributes `target_temperature`, `event_summary`, `event_start`, `climate_entity`.
+- **public_url**: adresa HA fără cale, de exemplu `https://ha.voxdomini.ro`.
+- **base_path**: `/camera` (implicit). Codurile QR duc la `https://ha.voxdomini.ro/camera/<cod>`.
+- **trust_proxy_headers**: pornește-l când în față e un reverse proxy (vezi secțiunea 3), ca limitările
+  de modificări și blocările de PIN să vadă adresa reală a fiecărui telefon.
+- **min_temp / max_temp / temp_step**: limitele pentru oaspeți (se pot schimba pe cameră în `rooms.yaml`).
+- **default_language**: `ro` sau `en`.
+- **pin_remember_hours / pin_max_attempts / pin_lockout_minutes**: comportamentul PIN-ului (PIN-urile se setează din administrare).
+- **publish_precondition_sensors**: creează `sensor.<area_id>_next_precondition` (timestamp) cu
+  atributele `target_temperature`, `event_summary`, `event_start`, `climate_entity`.
 
-**Print text**: the line under each QR code on the print sheet. Set it for every room with **Print text: all rooms**
-(default "Scanează- Termostat") or per room with **Edit** next to "Print text" in the QR code column.
+**Text la printare**: linia de sub fiecare cod QR pe foaia printată. Se setează pentru toate camerele cu
+**Text la printare: toate camerele** (implicit „Scanează- Termostat”) sau pe cameră cu **Modifică**, lângă
+„Text la printare” în coloana Cod QR.
 
-Per-room overrides: copy `rooms.example.yaml` to `/addon_configs/<id>_room_climate_portal/rooms.yaml`.
+Setări pe cameră: copiază `rooms.example.yaml` în `/addon_configs/<id>_room_climate_portal/rooms.yaml`.
 
-## 3. Publish the pages under your HA domain (same port 443)
+## 3. Publică paginile sub domeniul HA (același port 443)
 
-The add-on serves everything below `/camera` on its port 8080. Whatever answers on 443 for
-`ha.voxdomini.ro` forwards `/camera/` there and everything else to HA as before.
-Use the add-on's **Hostname** from its Info page (e.g. `a0d7b954-room-climate-portal`) as the upstream;
-the HA Green's LAN IP with port 8080 works too.
+Add-on-ul servește tot ce e sub `/camera` pe portul lui 8080. Ce răspunde pe 443 pentru
+`ha.voxdomini.ro` trimite `/camera/` acolo și restul la HA, ca până acum.
+Ca destinație folosește **Hostname**-ul add-on-ului din pagina lui Info (de exemplu
+`a0d7b954-room-climate-portal`); merge și IP-ul din rețea al HA Green, cu portul 8080.
 
-### With the official "NGINX Home Assistant SSL proxy" add-on (works on HA Green)
+### Cu add-on-ul oficial „NGINX Home Assistant SSL proxy” (merge pe HA Green)
 
-1. Create `/share/nginx_proxy_default_camera.conf` (Samba or File editor add-on):
+1. Creează `/share/nginx_proxy_default_camera.conf` (add-on-ul Samba sau File editor):
 
    ```nginx
    location /camera/ {
@@ -59,233 +64,246 @@ the HA Green's LAN IP with port 8080 works too.
        proxy_set_header Host $host;
        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
        proxy_set_header X-Forwarded-Proto $scheme;
-       proxy_buffering off;          # live updates (Server-Sent Events)
+       proxy_buffering off;          # actualizări live (Server-Sent Events)
        proxy_read_timeout 1h;
    }
    ```
-2. In the NGINX add-on configuration set `customize: active: true` (default pattern
-   `nginx_proxy_default*.conf` picks the file up) and restart the NGINX add-on.
-3. In this add-on set `trust_proxy_headers: true`.
+2. În configurația add-on-ului NGINX setează `customize: active: true` (modelul implicit
+   `nginx_proxy_default*.conf` preia fișierul) și repornește add-on-ul NGINX.
+3. În acest add-on setează `trust_proxy_headers: true`.
 
-If HA currently terminates HTTPS itself (`ssl_certificate` under `http:` in configuration.yaml with the
-router forwarding 443 → 8123), switching to the NGINX add-on means: install it with your domain and the
-certificate files from `/ssl`, remove the `ssl_*` lines from `http:`, add
-`use_x_forwarded_for: true` and `trusted_proxies: [172.30.33.0/24]` under `http:`, restart HA,
-and forward the router's 443 to the HA Green's port 443.
+Dacă HA face acum singur HTTPS (`ssl_certificate` sub `http:` în configuration.yaml, cu routerul
+trimițând 443 → 8123), trecerea la add-on-ul NGINX înseamnă: îl instalezi cu domeniul tău și fișierele
+de certificat din `/ssl`, ștergi liniile `ssl_*` din `http:`, adaugi `use_x_forwarded_for: true` și
+`trusted_proxies: [172.30.33.0/24]` sub `http:`, repornești HA și trimiți portul 443 al routerului la
+portul 443 al HA Green.
 
-### With the Cloudflared add-on (Cloudflare Tunnel)
+### Cu add-on-ul Cloudflared (Cloudflare Tunnel)
 
-No NGINX needed. Set `trust_proxy_headers: true` in this add-on.
+Nu e nevoie de NGINX. Setează `trust_proxy_headers: true` în acest add-on.
 
-- **Tunnel managed in the Cloudflare dashboard** (the Cloudflared add-on has `tunnel_token` set):
-  Zero Trust → Networks → Tunnels → your tunnel → Public Hostname → **Add a public hostname**:
-  subdomain `ha`, domain `voxdomini.ro`, path `camera/*`, service **HTTP** `172.30.32.1:8080`.
-  Make sure this entry is listed **above** the existing `ha.voxdomini.ro` entry (rules match top-down).
-- **Tunnel managed by the add-on itself** (no `tunnel_token`): the add-on cannot add a path rule on the
-  HA hostname. Use a subdomain instead, in the Cloudflared add-on options:
+- **Tunel administrat din dashboard-ul Cloudflare** (add-on-ul Cloudflared are `tunnel_token`):
+  Zero Trust → Networks → Tunnels → tunelul tău → Public Hostname → **Add a public hostname**:
+  subdomeniu `ha`, domeniu `voxdomini.ro`, cale `camera/*`, serviciu **HTTP** `172.30.32.1:8080`.
+  Intrarea trebuie să fie **deasupra** intrării existente `ha.voxdomini.ro` (regulile se potrivesc de sus în jos).
+- **Tunel administrat chiar de add-on** (fără `tunnel_token`): add-on-ul nu poate adăuga o regulă pe cale
+  pentru hostname-ul HA. Folosește un subdomeniu, în opțiunile add-on-ului Cloudflared:
   `additional_hosts: [{hostname: camera.voxdomini.ro, service: "http://172.30.32.1:8080"}]`,
-  and set this add-on's `public_url` to `https://camera.voxdomini.ro`.
+  și setează `public_url` al acestui add-on la `https://camera.voxdomini.ro`.
 
-`172.30.32.1` is the HA host as seen from add-ons, where port 8080 of this add-on is published.
-If `cloudflared` runs on another computer (not as an HA add-on), use the HA machine's LAN IP instead, e.g. `http://192.168.1.50:8080`.
+`172.30.32.1` e mașina HA văzută din add-on-uri, unde e publicat portul 8080 al acestui add-on.
+Dacă `cloudflared` rulează pe alt calculator (nu ca add-on HA), folosește IP-ul din rețea al mașinii HA,
+de exemplu `http://192.168.1.50:8080`.
 
-### With Nabu Casa remote access
+### Cu accesul de la distanță Nabu Casa
 
-Not possible: the Nabu Casa URL only reaches HA itself. Use one of the options above.
+Nu se poate: adresa Nabu Casa ajunge doar la HA. Folosește una dintre variantele de mai sus.
 
-## 4. PIN (optional)
+## 4. PIN (opțional)
 
-On the admin page each room has **Set PIN / Change PIN / Remove PIN**, and **PIN for all rooms** sets
-(or removes, when left empty) the same PIN everywhere. With a PIN, the phone asks for it once and
-remembers it for `pin_remember_hours`; changing the PIN logs every phone out of that room.
-After `pin_max_attempts` wrong tries a phone is locked out for `pin_lockout_minutes`, and a room
-accepts at most 50 wrong tries per hour in total.
+În tab-ul **Camere**, fiecare cameră are **Setează PIN / Schimbă PIN-ul / Șterge PIN-ul**, iar **PIN
+pentru toate camerele** pune (sau șterge, dacă îl lași gol) același PIN peste tot. Cu PIN, telefonul îl
+cere o dată și îl ține minte `pin_remember_hours`; schimbarea PIN-ului deconectează toate telefoanele din
+acea cameră. După `pin_max_attempts` încercări greșite, telefonul e blocat `pin_lockout_minutes`, iar o
+cameră acceptă cel mult 50 de încercări greșite pe oră, în total.
 
-## 5. Start preconditioning at the shown time
+## 5. Pornește preîncălzirea la ora afișată
 
-Import the blueprint `blueprints/automation/room_precondition.yaml` from this repository and create one
-automation per room (precondition sensor + thermostat). It fires at exactly the time the page shows,
-so page and heating never disagree.
+Importă blueprint-ul `blueprints/automation/room_precondition.yaml` din acest repository și creează câte o
+automatizare pentru fiecare cameră (senzorul de preîncălzire + termostatul). Ea pornește exact la ora
+afișată pe pagină, așa că pagina și încălzirea nu se contrazic.
 
-## 6. Manual heating and planned periods
+## 6. Încălzire manuală și perioade planificate
 
-Rooms without a calendar event can still be heated from the room page:
+Camerele fără eveniment în calendar se pot încălzi și din pagina camerei:
 
-- **Start heating** for 1 h, 2 h or 4 h, or **until** a chosen hour. Changing the temperature with − / +
-  also starts manual heating (and switches a thermostat that is off back on).
-- By default manual heating **turns itself off after 2 hours** (`hold_default_minutes`). While it runs the
-  guest can add +30 min / +1 h, set another end hour, or turn it off now. One period is at most
-  `hold_max_hours` (12 h).
-- **Plan a period**: from–until hours within the next 24 h, with its own temperature (up to 4 per room).
-  It turns on and off by itself and shows on the Program page.
-- At the end the thermostat goes back to the **room settings from the admin page** (see below). If a
-  calendar event is preconditioning or running in that room at that moment, nothing is changed, so the
-  event keeps its heating.
+- **Pornește încălzirea** pentru 1 h, 2 h sau 4 h, sau **până la** o oră aleasă. Schimbarea temperaturii
+  cu − / + pornește și ea încălzirea manuală (și repornește un termostat oprit).
+- Implicit, încălzirea manuală **se oprește singură după 2 ore** (`hold_default_minutes`). Cât timp
+  merge, oaspetele poate adăuga +30 min / +1 h, poate alege altă oră de final sau o poate opri. O perioadă
+  durează cel mult `hold_max_hours` (12 h).
+- **Planifică o perioadă**: de la–până la, în următoarele 24 h, cu temperatura ei (cel mult 4 pe cameră).
+  Pornește și se oprește singură și apare pe pagina Program.
+- La final, termostatul revine la **setările camerei din administrare** (vezi mai jos). Dacă în acel
+  moment camera are un eveniment în preîncălzire sau în desfășurare, nu se schimbă nimic, ca evenimentul
+  să-și păstreze încălzirea.
 
-### Room settings (admin page)
+### Setările camerei (administrare)
 
-The temperature and mode you set for a room on the admin page are remembered as that room's settings.
-Whenever a manual period, a planned period or a calendar event ends (or an event is deleted while it runs),
-the thermostat goes back to them, e.g. *Off*, or *Heat 18 °C*. Rooms you never set there are turned off
-(`hold_end_action: off`) or set to `setback_temp` (`hold_end_action: setback`). Turn
-`restore_after_events` off if your own automations already handle the end of events.
+Temperatura și modul setate pentru o cameră în administrare sunt ținute minte ca setările camerei. Când
+se termină o perioadă manuală, o perioadă planificată sau un eveniment din calendar (sau un eveniment e
+șters în timp ce rulează), termostatul revine la ele, de exemplu *Oprit* sau *Încălzire 18 °C*. Camerele
+pe care nu le-ai setat sunt oprite (`hold_end_action: off`) sau puse la `setback_temp`
+(`hold_end_action: setback`). Oprește `restore_after_events` dacă automatizările tale se ocupă deja de
+sfârșitul evenimentelor.
 
-Periods are stored in `/data/holds.json` and survive restarts and updates.
+Perioadele sunt salvate în `/data/holds.json` și rămân după reporniri și actualizări.
 
-## 7. Custom codes
+## 7. Coduri personalizate
 
-By default each room's link is built from its floor and name, e.g. Area *D01 - Sala sport* on floor
-*Demisol* → `https://camera.voxdomini.ro/room/demisol-d01-sala-sport` (accents removed, lower case; a
-number is added if two rooms would get the same link). The code is fixed when the room is first seen, so
-renaming the area later does not break the printed QR code; **Readable code** rebuilds it from the current
-name. Readable links are easy to guess, so give those rooms a PIN, or set `readable_codes: false` to use a
-random 22-character code instead. **Custom code** on the admin page lets you choose it,
-e.g. `sala-102` → `https://camera.voxdomini.ro/camera/sala-102`. Codes must be unique and use 4-64 letters,
-digits, `-` or `_`. A short or guessable code (like the room number) can be tried by anyone, so give such
-rooms a PIN. **New random code** replaces a custom code with a random one. Either change stops the old printed code.
+Implicit, linkul fiecărei camere se formează din etaj și nume, de exemplu zona *D01 - Sala sport* de pe
+etajul *Demisol* → `https://camera.voxdomini.ro/room/demisol-d01-sala-sport` (fără diacritice, cu litere
+mici; se adaugă un număr dacă două camere ar primi același link). Codul se fixează când camera e văzută
+prima dată, așa că redenumirea zonei nu strică codul QR printat; **Cod ușor de citit** îl reface din
+numele actual. Linkurile ușor de citit sunt ușor de ghicit, așa că pune PIN acestor camere sau setează
+`readable_codes: false` ca să folosești un cod aleator de 22 de caractere. **Cod personalizat** îți
+permite să-l alegi, de exemplu `sala-102` → `https://camera.voxdomini.ro/camera/sala-102`. Codurile
+trebuie să fie unice și să aibă 4–64 de litere, cifre, `-` sau `_`. Un cod scurt sau ușor de ghicit (cum
+e numărul camerei) poate fi încercat de oricine, așa că pune PIN acestor camere. **Cod aleator nou**
+înlocuiește un cod personalizat cu unul aleator. Orice schimbare oprește codul printat vechi.
 
-## 8. Print the QR codes
+## 8. Printează codurile QR
 
-Open **Room QR** in the HA sidebar. It lists every room with what was found (and what is missing),
-the live temperatures, the next event and its QR code. **Print all QR codes** gives an A4 sheet;
-**New code** replaces one room's code (the old sticker stops working immediately, open pages close).
+Deschide **Încălzire camere** din bara laterală HA. Tab-ul **Camere** listează toate camerele, cu ce s-a
+găsit (și ce lipsește), temperaturile live, următorul eveniment și codul QR. **Printează toate codurile
+QR** dă o foaie A4; **Cod aleator nou** înlocuiește codul unei camere (eticheta veche nu mai funcționează
+imediat, paginile deschise se închid).
 
-## 9. Heating plant and heating log
+## 9. Instalația și jurnalul de încălzire
 
-The **Plant** tab of the admin page shows each boiler with the circuit it uses (open or closed, preset,
-heat request) and a table that links every room to the circuit that heats it, its valve (a switch on the
-manifold, if it has one) and its temperature sensor. Values marked *guess* come from the room's Area: a
-`*_relay` switch becomes the valve, the Area's temperature sensor the sensor. Pick a value to keep it,
-pick "–" to go back to the guess. **Heating** sets whether a room follows calendar events, only needs frost
-protection, or is not heated at all.
+Tab-ul **Instalație** arată fiecare centrală cu circuitul pe care îl folosește (pornit sau oprit, preset,
+cerere de căldură) și un tabel care leagă fiecare cameră de circuitul care o încălzește, de robinetul ei
+(un switch pe distribuitor, dacă are) și de senzorul ei de temperatură. Valorile marcate *ghicit* vin din
+zona camerei: un switch `*_relay` devine robinetul, senzorul de temperatură al zonei devine senzorul.
+Alege o valoare ca s-o păstrezi, alege „–” ca să revii la ce a fost ghicit. **Încălzire** stabilește dacă
+o cameră urmează evenimentele din calendar, are nevoie doar de antiîngheț sau nu se încălzește deloc.
 
-Boilers are created on first start and saved in `/data/topology.json`. Only the first circuit of each
-boiler is used: `climate.sala_plen1`, `climate.parter1`, `climate.etaj1` and `climate.demisol1`. The add-on
-shows each circuit under its name in HA (a name you set in the entity registry wins).
-A circuit counts as open while its preset is `Winter` or its `heat_request` is above 0.
+Centralele se creează la prima pornire și se salvează în `/data/topology.json`. Se folosește doar primul
+circuit al fiecărei centrale: `climate.sala_plen1`, `climate.parter1`, `climate.etaj1` și
+`climate.demisol1`. Add-on-ul arată fiecare circuit cu numele lui din HA (un nume setat în registrul de
+entități are prioritate). Un circuit e considerat pornit cât timp presetul lui e `Winter` sau
+`heat_request` e peste 0.
 
-The add-on records the room temperatures, the outdoor temperature (`outdoor_sensor`), every circuit and
-every valve in `/data/heating.db` (SQLite): a row per change, at least one every 10 minutes. Rows older
-than 120 days are averaged to 15 minutes. The **Heating log** tab lists the runs measured from it:
+Add-on-ul înregistrează temperaturile camerelor, temperatura de afară (`outdoor_sensor`), fiecare circuit
+și fiecare robinet în `/data/heating.db` (SQLite): un rând la fiecare schimbare, cel puțin unul la 10
+minute. Rândurile mai vechi de 120 de zile devin medii pe 15 minute. Tab-ul **Jurnal încălzire** listează
+rulările măsurate din ele:
 
-| Run | What is measured per room |
+| Rulare | Ce se măsoară pentru fiecare cameră |
 | --- | --- |
-| Heat (circuit opens until it closes, at most 8 h) | start temperature, dead time until +0.2 °C, heating rate in °C/h, time to the comfort temperature, outdoor temperature, how many circuits of the boiler were open |
-| Cool (circuit closed for 2 h or more) | time constant τ in hours: how fast the room loses heat to the outside |
+| Încălzire (de la pornirea circuitului până la oprire, cel mult 8 h) | temperatura de pornire, timpul mort până la +0,2 °C, viteza de încălzire în °C/h, timpul până la temperatura de confort, temperatura de afară, câte circuite ale centralei erau pornite |
+| Răcire (circuit oprit cel puțin 2 h) | constanta de timp τ în ore: cât de repede pierde camera căldura spre exterior |
 
-Add a note to a run to mark a test, for example "Test A, one circuit". Nothing in this version switches
-heating on or off: preconditioning still uses the lead time.
+Adaugă o notă unei rulări ca să marchezi un test, de exemplu „Test A, un circuit”.
 
-## 10. Start estimates (shown only)
+## 10. Ora estimată de pornire
 
-The **Plant** tab opens with one row per circuit that has a linked room with a timed event coming up.
-The row shows the room that needs heat first, when the circuit should open for it, and how that time is
-calculated:
+Secțiunea **Ora estimată de pornire** din tab-ul Instalație are câte un rând pentru fiecare circuit cu o
+cameră legată care are un eveniment cu oră în viitor. Rândul arată camera care are nevoie prima de
+căldură, când trebuie pornit circuitul pentru ea și cum e calculată ora:
 
 ```
-lead = dead time + (target − room temperature at the start) ÷ heating rate + 15 min margin
+preîncălzire = timp mort + (țintă − temperatura camerei la pornire) ÷ viteza de încălzire + 15 min rezervă
 ```
 
-- **Dead time and heating rate** come from the room's heat runs in the Heating log. If the room has none,
-  the runs of other rooms on the same circuit are used. Without any runs, the defaults are 40 min and 1.5 °C/h.
-  The badge says how many runs were used.
-- **Shared boiler**: when other circuits of the same boiler heat at the same time, the boiler's power is shared
-  (2 circuits: 67 % each, 3 circuits: 50 %), so the start moves earlier.
-- **Outdoor temperature**: with 5 runs or more spread over at least 4 °C of outdoor temperature, the rate also
-  follows the outdoor temperature.
-- **Cooling until the start**: once the room has a τ from a cool run, the estimate predicts how far the room
-  cools before the circuit opens.
-- **Target**: the event's `target:` line, else the room's comfort temperature from the Plant tab, else
-  `default_target_temp`.
-- **Lead time now**: the fixed lead time that preconditioning really uses, for comparison.
+- **Timpul mort și viteza de încălzire** vin din rulările de încălzire ale camerei din Jurnal încălzire.
+  Dacă nu are, se folosesc rulările altor camere de pe același circuit. Fără nicio rulare, valorile
+  implicite sunt 40 min și 1,5 °C/h. Eticheta arată câte rulări s-au folosit.
+- **Centrală împărțită**: când alte circuite ale aceleiași centrale încălzesc în același timp, puterea
+  centralei se împarte (2 circuite: 67 % fiecare, 3 circuite: 50 %), deci pornirea se mută mai devreme.
+- **Temperatura de afară**: cu cel puțin 5 rulări răspândite pe cel puțin 4 °C de temperatură exterioară,
+  viteza urmează și temperatura de afară.
+- **Răcirea până la pornire**: după ce camera are un τ dintr-o rulare de răcire, estimarea prezice cât
+  se răcește camera până pornește circuitul.
+- **Ținta**: linia `target:` a evenimentului, altfel temperatura de confort a camerei din tab-ul
+  Instalație, altfel `default_target_temp`.
+- **Preîncălzirea folosită acum**: timpul fix folosit efectiv de preîncălzire, pentru comparație.
 
-The **Heating log** tab ends with **Estimates vs what happened**: the last estimate made before each event's
-estimated start, then, once the event is over, when the circuit really opened, the room temperature when the
-event started and when the room reached its target. Nothing switches heating on its own in this version.
+Pe telefon, cardul arată doar următorul eveniment și ora estimată; **Detalii** deschide restul.
 
-## 11. Heating control (switching the circuits)
+Tab-ul **Jurnal încălzire** se încheie cu **Estimat față de realitate**: ultima estimare făcută înainte de
+ora estimată de pornire a fiecărui eveniment, apoi, după eveniment, când a pornit de fapt circuitul,
+temperatura camerei la începutul evenimentului și când a ajuns camera la țintă.
 
-The **Heating control** section of the Plant tab has one card per boiler, each in one of two modes:
+## 11. Comanda încălzirii (comutarea circuitelor)
 
-- **Shadow** (default): the add-on decides every minute what it would do with the circuit and shows it
-  ("Would open: preheat for Sala Mare"). Nothing is sent to HA.
-- **Active**: the add-on switches the circuit (preset `Winter` to open, `Summer` to close) and the valves
-  (switches) of the rooms on it.
+Secțiunea **Comanda încălzirii** din tab-ul Instalație are câte un card pentru fiecare centrală, în unul
+din două moduri:
 
-A circuit opens for:
+- **Simulare** (implicit): add-on-ul decide în fiecare minut ce ar face cu circuitul și arată decizia
+  („Ar porni: preîncălzire pentru Sala Mare”). Nu se trimite nimic la HA.
+- **Activ**: add-on-ul comută circuitul (presetul `Winter` ca să pornească, `Summer` ca să oprească) și
+  robinetele (switch-urile) camerelor de pe el.
 
-| Reason | When |
+Un circuit pornește pentru:
+
+| Motiv | Când |
 | --- | --- |
-| Preheat | From the estimated start (section 10) until the event, until the room reaches its target |
-| Event | While an event runs in a room on the circuit: below target − `hysteresis` it opens, above target + `hysteresis` it closes. A room without a sensor heats for the whole event. |
-| Frost | Any heated room below `frost_temp` (default 10 °C), until it is 1 °C warmer |
+| Preîncălzire | De la ora estimată (secțiunea 10) până la eveniment, până ajunge camera la țintă |
+| Eveniment | Cât timp rulează un eveniment într-o cameră de pe circuit: sub țintă − `hysteresis` pornește, peste țintă + `hysteresis` se oprește. O cameră fără senzor se încălzește tot evenimentul. |
+| Antiîngheț | Orice cameră încălzită sub `frost_temp` (implicit 10 °C), până se încălzește cu 1 °C |
 
-It closes otherwise, and switches at most once every `min_switch_minutes` (default 10; frost protection
-does not wait). A room valve is open only while its own room needs heat.
+Altfel se oprește, și comută cel mult o dată la `min_switch_minutes` (implicit 10; antiîngheț-ul nu
+așteaptă). Robinetul unei camere e deschis doar cât timp camera lui are nevoie de căldură.
 
-### Before you set a boiler to Active
+### Înainte să pui o centrală pe Activ
 
-1. **Takeover automations.** Under *Choose automations*, tick every HA automation that switches this
-   circuit. For Sala Plen today: *Sala Mare - termostat Zone1*, *Sala Mare - termostat oprit, Zone1 pe Summer*,
-   *HVAC sala plen - smart start/resume*. *Climate - Winter at night, Summer in the morning* switches all four
-   boilers: taking it over stops its night heating for the boilers left in Shadow as well. Active turns these
-   automations off; Shadow turns them back on.
-2. **Watchdog.** Create one automation from the blueprint `blueprints/automation/heating_watchdog.yaml`
-   (import it from the repository). The add-on publishes `sensor.heating_controller_heartbeat` every minute; if it
-   is older than 15 minutes, the watchdog turns the taken-over automations back on and shows a notification.
-   When the add-on runs again and sees one of its takeover automations on, it sets that boiler back to Shadow:
-   set it to Active again from the Plant tab once all is well.
-3. **Parter valves.** The relays `switch.p0X_…_relay` are also switched by the generic thermostats
-   `climate.p0X_…_thermostat`. Turn those thermostats off before setting Parter to Active, or they will fight.
+1. **Automatizări preluate.** La *Alege automatizările*, bifează fiecare automatizare HA care comută acest
+   circuit. Pentru Sala Plen azi: *Sala Mare - termostat Zone1*, *Sala Mare - termostat oprit, Zone1 pe
+   Summer*, *HVAC sala plen - smart start/resume*. *Climate - Winter at night, Summer in the morning*
+   comută toate cele patru centrale: dacă o preiei, se oprește încălzirea ei de noapte și pentru
+   centralele rămase pe Simulare. Activ oprește aceste automatizări; Simulare le repornește.
+2. **Watchdog.** Creează o automatizare din blueprint-ul `blueprints/automation/heating_watchdog.yaml`
+   (importă-l din repository). Add-on-ul publică `sensor.heating_controller_heartbeat` în fiecare minut;
+   dacă e mai vechi de 15 minute, watchdog-ul repornește automatizările preluate și afișează o notificare.
+   Când add-on-ul pornește din nou și vede pornită una din automatizările lui preluate, trece centrala
+   înapoi pe Simulare: pune-o din nou pe Activ din tab-ul Instalație după ce totul e în regulă.
+3. **Robinetele de la Parter.** Releele `switch.p0X_…_relay` sunt comandate și de termostatele generice
+   `climate.p0X_…_thermostat`. Oprește acele termostate înainte să pui Parterul pe Activ, altfel se bat.
 
-Every switch the add-on makes is in Recent changes ("Controller: … → Winter (preheat, …)").
+Fiecare comutare făcută de add-on apare în Modificări recente („Controler: … → Winter (preîncălzire, …)”).
 
-## 12. Saving energy, warnings, tests and charts
+## 12. Economie, avertismente, teste și grafice
 
-**Early stop (coast).** Once the room has a τ from a cool run, heating stops before an event ends: as long
-as the room loses at most `coast_drop` °C (default 0.5) by the end, capped at `max_coast_minutes` (45).
-A room already 1 °C under its target keeps heating.
+**Oprire anticipată.** După ce camera are un τ dintr-o rulare de răcire, încălzirea se oprește înainte
+de finalul evenimentului, cât timp camera pierde cel mult `coast_drop` °C (implicit 0,5) până la final,
+dar nu mai devreme de `max_coast_minutes` (45). O cameră care e deja cu 1 °C sub țintă se încălzește în
+continuare.
 
-**Dynamic setback.** Before an event within `setback_horizon_hours` (24 h), each room is kept above a floor:
-the lowest temperature from which preheating still fits in `max_preheat_hours` (6 h), given its learned
-dead time and rate (and the forecast). Farther from an event only frost protection applies, so the room can
-cool down as far as it likes. The Heating control card shows each room's floor.
+**Temperatura minimă de așteptare (setback dinamic).** Înaintea unui eveniment din următoarele
+`setback_horizon_hours` (24 h), fiecare cameră e ținută peste un minim: cea mai mică temperatură din
+care preîncălzirea încă încape în `max_preheat_hours` (6 h), după timpul mort și viteza învățate (și
+prognoză). Mai departe de un eveniment se aplică doar antiîngheț-ul, deci camera se poate răci cât vrea.
+Cardul din Comanda încălzirii arată minimul fiecărei camere.
 
-**On track or late.** While a circuit preheats, the add-on projects when the room reaches its target from what
-the room really does. If that is more than `late_margin_minutes` (10) after the event starts, the card says
-"late" and you get one notification per event.
+**La timp sau întârziat.** În timpul preîncălzirii, add-on-ul calculează când ajunge camera la țintă din
+ce face ea de fapt. Dacă asta e cu mai mult de `late_margin_minutes` (10) după începutul evenimentului,
+cardul scrie „întârzie” și primești o notificare pe eveniment.
 
-**Forecast.** Set `weather_entity` (e.g. `weather.forecast_home`). Estimates and setback floors then use the
-forecast temperature of each preheat window instead of the temperature now.
+**Prognoză.** Setează `weather_entity` (de exemplu `weather.forecast_vox_domini`). Estimările și minimul
+de așteptare folosesc atunci temperatura prognozată pentru fiecare interval de preîncălzire, nu
+temperatura de acum.
 
-**Estimated start on the room pages.** At the top of the start estimates, choose *Estimated start* to make the
-room pages, `sensor.<room>_next_precondition` and the "event running" window use each room's estimated lead
-for its next event instead of the fixed lead time. *Fixed lead time* goes back.
+**Ora estimată pe paginile camerelor.** Deasupra estimărilor, alege *Ora estimată* ca paginile
+camerelor, `sensor.<cameră>_next_precondition` și intervalul „eveniment în desfășurare” să folosească
+preîncălzirea estimată a fiecărei camere pentru următorul ei eveniment, în loc de timpul fix. *Timpul
+fix* revine la valoarea fixă.
 
-**Sensors in HA**, updated every minute: `sensor.heating_<circuit>_next_start` (timestamp; room, event, lead,
-confidence) and `sensor.heating_<circuit>_decision` (open/closed; reason, mode, late), e.g.
-`sensor.heating_sala_plen1_next_start`.
+**Senzori în HA**, actualizați în fiecare minut: `sensor.heating_<circuit>_next_start` (timestamp;
+cameră, eveniment, preîncălzire, încredere) și `sensor.heating_<circuit>_decision` (open/closed; motiv,
+mod, întârziere), de exemplu `sensor.heating_sala_plen1_next_start`.
 
-**Notifications** go to `notify_service` (e.g. `notify.mobile_app_phone`), else to HA's notification panel:
-late preheating, a circuit that did not switch within 5 minutes of a command, a test stopped by an event,
-and once a day the linked room sensors that are offline.
+**Notificările** merg la `notify_service` (de exemplu `notify.iphone`), altfel în panoul de notificări
+din HA: preîncălzire întârziată, un circuit care nu a comutat în 5 minute după comandă, un test oprit de
+un eveniment și, o dată pe zi, senzorii camerelor legate care sunt offline.
 
-**Tests.** On an Active boiler, *Run a test (A then B)* schedules, for example tonight at 22:00, test A (open
-until the room is 3 °C warmer or 4 h pass) then test B (closed for 8 h). Runs made during a test get the
-note "Test A" or "Test B" in the Heating log. A test is refused if an event (with its lead time) falls inside
-it, and stops if the circuit is needed.
+**Teste.** Pe o centrală Activă, *Pornește un test (A, apoi B)* programează, de exemplu diseară la 22:00,
+testul A (pornit până camera crește cu 3 °C sau trec 4 h), apoi testul B (oprit 8 h). Rulările făcute în
+timpul unui test primesc nota „Test A” sau „Test B” în Jurnal încălzire. Un test e refuzat dacă un
+eveniment (cu preîncălzirea lui) cade în timpul lui și se oprește dacă e nevoie de circuit.
 
-**Charts.** *Last 24 h* on each circuit, and *Chart* on each run in the Heating log: room temperature,
-outdoor temperature and the periods the circuit was open.
+**Grafice.** *Ultimele 24 h* pe fiecare circuit și *Grafic* pe fiecare rulare din Jurnal încălzire:
+temperatura camerei, temperatura de afară și perioadele în care circuitul a fost pornit.
 
-**Watchdog after a restart.** In the watchdog automation, pick the same automations as *Fallback automations*:
-if the heartbeat has not come back within 15 minutes of Home Assistant starting, they are turned on.
+**Watchdog după repornire.** În automatizarea watchdog, alege la *Automatizări de rezervă* aceleași
+automatizări: dacă semnalul de funcționare nu revine în 15 minute de la pornirea Home Assistant, ele sunt
+repornite.
 
-## Security
+## Securitate
 
-- Each code is a 128-bit random-looking token (HMAC of a secret in `/data`); room numbers are never in the URL.
-- Optional per-room PIN, stored as a salted PBKDF2 hash; the unlock cookie is HttpOnly, SameSite=Strict, scoped to `/camera/`.
-- A code only reaches its own room's thermostat, and only `set_temperature` (plus HVAC mode if allowed).
-- Setpoints are clamped server-side; one change per room every 3 s and 60 per hour per phone.
-- Every change is logged (room, old → new, time, pseudonymous phone id) and shown on the admin page.
-- Guest pages send strict CSP, `no-referrer` and no third-party code.
+- Fiecare cod e un token de 128 de biți care arată aleator (HMAC al unui secret din `/data`); numerele camerelor nu apar niciodată în URL.
+- PIN opțional pe cameră, salvat ca hash PBKDF2 cu salt; cookie-ul de deblocare e HttpOnly, SameSite=Strict, limitat la `/camera/`.
+- Un cod ajunge doar la termostatul camerei lui și doar la `set_temperature` (plus modul termostatului, dacă e permis).
+- Țintele sunt limitate pe server; o modificare pe cameră la 3 s și 60 pe oră pe telefon.
+- Fiecare modificare e înregistrată (cameră, vechi → nou, ora, id pseudonim al telefonului) și apare în administrare.
+- Paginile pentru oaspeți trimit CSP strict, `no-referrer` și niciun cod de la terți.

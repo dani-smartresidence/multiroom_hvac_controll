@@ -39,6 +39,12 @@ def _asset_version() -> str:
 
 ASSET_V = _asset_version()
 PORTAL_KEY = web.AppKey("portal", Portal)
+TOPOLOGY_ERRORS = {
+    "unknown_room": "Cameră necunoscută", "unknown_field": "Câmp necunoscut", "unknown_boiler": "Centrală necunoscută",
+    "unknown_circuit": "Circuit necunoscut", "bad_category": "Tip de încălzire necunoscut",
+    "bad_comfort": "Confortul trebuie să fie între 5 și 30 °C", "bad_valve": "Robinetul trebuie să fie un switch",
+    "bad_temperature": "Senzorul trebuie să fie un sensor sau un climate",
+}
 
 GUEST_CSP = (
     "default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; "
@@ -309,7 +315,7 @@ def _sse(message: dict) -> bytes:
 @web.middleware
 async def ingress_only(request: web.Request, handler):
     if os.environ.get("PORTAL_ADMIN_OPEN") != "1" and request.remote not in INGRESS_IPS:
-        raise web.HTTPForbidden(text="Admin is only reachable through Home Assistant.")
+        raise web.HTTPForbidden(text="Administrarea se deschide doar din Home Assistant.")
     resp = await handler(request)
     _revalidate_static(request, resp)
     resp.headers.setdefault("X-Content-Type-Options", "nosniff")
@@ -415,13 +421,13 @@ def build_admin_app(portal: Portal) -> web.Application:
         try:
             data = await request.json()
         except Exception:  # noqa: BLE001
-            raise web.HTTPBadRequest(text="bad json")
+            raise web.HTTPBadRequest(text="Cerere invalidă")
         pin = data.get("pin") if isinstance(data, dict) else None
         if pin in (None, ""):
             return None
         pin = str(pin)
         if not PIN_RE.match(pin):
-            raise web.HTTPBadRequest(text=json.dumps({"error": "PIN must be 4 to 8 digits"}), content_type="application/json")
+            raise web.HTTPBadRequest(text=json.dumps({"error": "PIN-ul trebuie să aibă între 4 și 8 cifre"}), content_type="application/json")
         return pin
 
     @routes.post("/api/rooms/{room_id}/code")
@@ -430,7 +436,7 @@ def build_admin_app(portal: Portal) -> web.Application:
         try:
             data = await request.json()
         except Exception:  # noqa: BLE001
-            raise web.HTTPBadRequest(text="bad json")
+            raise web.HTTPBadRequest(text="Cerere invalidă")
         code = data.get("code") if isinstance(data, dict) else None
         try:
             portal.tokens.set_custom(rid, code or None, portal.rooms.keys())
@@ -455,7 +461,7 @@ def build_admin_app(portal: Portal) -> web.Application:
         except Exception:  # noqa: BLE001
             data = None
         if not isinstance(data, dict):
-            raise web.HTTPBadRequest(text=json.dumps({"error": "bad json"}), content_type="application/json")
+            raise web.HTTPBadRequest(text=json.dumps({"error": "Cerere invalidă"}), content_type="application/json")
         return data
 
     @routes.post("/api/rooms/{room_id}/temperature")
@@ -467,7 +473,7 @@ def build_admin_app(portal: Portal) -> web.Application:
             if value != value or abs(value) > 100:
                 raise ValueError
         except (TypeError, ValueError):
-            return _json({"error": "Not a temperature"}, 400)
+            return _json({"error": "Nu e o temperatură"}, 400)
         try:
             await portal.set_temperature(rid, value, "admin", admin=True)
         except HAError as err:
@@ -482,9 +488,9 @@ def build_admin_app(portal: Portal) -> web.Application:
         try:
             await portal.set_mode(rid, str(data.get("hvac_mode", "")), "admin", admin=True)
         except PermissionError:
-            return _json({"error": "This room has no thermostat"}, 400)
+            return _json({"error": "Camera nu are termostat"}, 400)
         except ValueError:
-            return _json({"error": "The thermostat does not support this mode"}, 400)
+            return _json({"error": "Termostatul nu are acest mod"}, 400)
         except HAError as err:
             return _json({"error": f"Home Assistant: {err.message}"}, 502)
         await asyncio.sleep(0.3)
@@ -497,9 +503,9 @@ def build_admin_app(portal: Portal) -> web.Application:
         try:
             await portal.set_preset(rid, str(data.get("preset_mode", "")), "admin")
         except PermissionError:
-            return _json({"error": "This room has no thermostat"}, 400)
+            return _json({"error": "Camera nu are termostat"}, 400)
         except ValueError:
-            return _json({"error": "The thermostat does not support this preset"}, 400)
+            return _json({"error": "Termostatul nu are acest preset"}, 400)
         except HAError as err:
             return _json({"error": f"Home Assistant: {err.message}"}, 502)
         await asyncio.sleep(0.3)
@@ -512,11 +518,11 @@ def build_admin_app(portal: Portal) -> web.Application:
         try:
             minutes = parse_minutes(data.get("lead_minutes"))
         except ValueError:
-            return _json({"error": "Lead time must be a whole number of minutes"}, 400)
+            return _json({"error": "Preîncălzirea trebuie să fie un număr întreg de minute"}, 400)
         try:
             await portal.set_lead_minutes(rid, minutes)
         except ValueError:
-            return _json({"error": "Lead time must be 0 to 600 minutes"}, 400)
+            return _json({"error": "Preîncălzirea trebuie să fie între 0 și 600 de minute"}, 400)
         return _json(room_row(rid))
 
     @routes.post("/api/lead_time_all")
@@ -525,11 +531,11 @@ def build_admin_app(portal: Portal) -> web.Application:
         try:
             minutes = parse_minutes(data.get("lead_minutes"))
         except ValueError:
-            return _json({"error": "Lead time must be a whole number of minutes"}, 400)
+            return _json({"error": "Preîncălzirea trebuie să fie un număr întreg de minute"}, 400)
         try:
             await portal.set_lead_minutes_all(minutes)
         except ValueError:
-            return _json({"error": "Lead time must be 0 to 600 minutes"}, 400)
+            return _json({"error": "Preîncălzirea trebuie să fie între 0 și 600 de minute"}, 400)
         return _json([room_row(rid) for rid in portal.rooms])
 
     def parse_minutes(value) -> int | None:
@@ -553,7 +559,7 @@ def build_admin_app(portal: Portal) -> web.Application:
         try:
             portal.set_print_caption(rid, data.get("caption"))
         except ValueError:
-            return _json({"error": "Use at most 80 characters"}, 400)
+            return _json({"error": "Folosește cel mult 80 de caractere"}, 400)
         return _json(room_row(rid))
 
     @routes.post("/api/caption_all")
@@ -562,7 +568,7 @@ def build_admin_app(portal: Portal) -> web.Application:
         try:
             portal.set_print_caption_all(data.get("caption"))
         except ValueError:
-            return _json({"error": "Use at most 80 characters"}, 400)
+            return _json({"error": "Folosește cel mult 80 de caractere"}, 400)
         return _json([room_row(rid) for rid in portal.rooms])
 
     @routes.post("/api/rooms/{room_id}/pin")
@@ -614,7 +620,8 @@ def build_admin_app(portal: Portal) -> web.Application:
         try:
             portal.update_link(rid, data)
         except TopologyError as err:
-            return _json({"error": str(err)}, 400)
+            code = str(err).split(":")[0]
+            return _json({"error": TOPOLOGY_ERRORS.get(code, str(err))}, 400)
         return _json(portal.plant())
 
     @routes.get("/api/control")
@@ -626,7 +633,7 @@ def build_admin_app(portal: Portal) -> web.Application:
         data = await admin_body(request)
         takeover = data.get("takeover")
         if takeover is not None and not isinstance(takeover, list):
-            return _json({"error": "takeover must be a list of automations"}, 400)
+            return _json({"error": "Lista de preluare trebuie să conțină automatizări"}, 400)
         try:
             await portal.set_boiler_control(request.match_info["boiler_id"], data.get("mode"), takeover)
         except KeyError:
@@ -658,7 +665,7 @@ def build_admin_app(portal: Portal) -> web.Application:
         try:
             await portal.set_lead_mode(str(data.get("mode", "")))
         except ValueError:
-            return _json({"error": "mode must be fixed or estimated"}, 400)
+            return _json({"error": "Alege timpul fix sau ora estimată"}, 400)
         return _json(portal.estimates())
 
     @routes.get("/api/estimates")
@@ -707,7 +714,7 @@ def build_admin_app(portal: Portal) -> web.Application:
             start = float(request.query.get("from", now - 86400))
             end = float(request.query.get("to", now))
         except ValueError:
-            return _json({"error": "from/to must be epoch seconds"}, 400)
+            return _json({"error": "from/to trebuie să fie secunde epoch"}, 400)
         return _json(await asyncio.to_thread(portal.datalog.series, key, start, end))
 
     @routes.get("/qr/{room_id}.svg")
