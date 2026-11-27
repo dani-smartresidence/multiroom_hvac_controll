@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, field
+from typing import Callable
 from statistics import median
 
 DEFAULT_DEAD_MIN = 40.0
@@ -152,12 +153,32 @@ class CircuitPlan:
     candidates: list[Candidate] = field(default_factory=list)
 
 
-def _estimate(c: Candidate, m: RoomModel, outdoor: float | None, n_open: int, now: int) -> dict:
+def coast_minutes(t_room: float | None, outdoor: float | None, tau_h: float | None, drop: float, max_min: float) -> float:
+    """How long before an event ends heating can stop and the room loses at most ``drop`` °C."""
+    if t_room is None or tau_h is None or outdoor is None or t_room - drop <= outdoor:
+        return 0.0
+    hours = -tau_h * math.log((t_room - drop - outdoor) / (t_room - outdoor))
+    return round(min(max_min, hours * 60), 1)
+
+
+def setback_floor(m: RoomModel, target: float, outdoor: float | None, frost: float, max_preheat_h: float) -> float:
+    """Lowest temperature the room may fall to so that preheating never needs more than ``max_preheat_h``."""
+    heat_h = max(0.0, max_preheat_h - (m.dead_min + MARGIN_MIN) / 60)
+    return round(max(frost, target - m.rate_at(outdoor) * heat_h), 2)
+
+
+OutdoorAt = Callable[[int, int], "float | None"]
+
+
+def _estimate(c: Candidate, m: RoomModel, outdoor: float | None, n_open: int, now: int, outdoor_at: OutdoorAt | None = None) -> dict:
     t_now = c.t_now if c.t_now is not None else 0.0
     t_at = t_now
     parts = lead(m, t_at, c.target, outdoor, n_open)
     for _ in range(3):  # the later the start, the more the room cools first
         start = c.event_start - parts["lead_min"] * 60
+        if outdoor_at is not None:  # the forecast for the preheat window, when there is one
+            forecast = outdoor_at(start, c.event_start)
+            outdoor = forecast if forecast is not None else outdoor
         t_at = predict_temp(t_now, outdoor, m.tau_h, max(0, start - now) / 3600)
         parts = lead(m, t_at, c.target, outdoor, n_open)
     return {
@@ -170,13 +191,21 @@ def _estimate(c: Candidate, m: RoomModel, outdoor: float | None, n_open: int, no
     }
 
 
-def plan_circuits(plans: list[CircuitPlan], models: tuple, outdoor: float | None, now: int) -> list[dict]:
-    """For every circuit, the room that needs heat first and when the circuit must open for it."""
+def plan_circuits(plans: list[CircuitPlan], models: tuple, outdoor: float | None, now: int,
+                  outdoor_at: OutdoorAt | None = None) -> list[dict]:
+    """For every circuit, the room that needs heat first and when the circuit must open for it.
+    Each entry also lists every room's own estimate under "rooms"."""
     rooms, circuits, taus = models
 
+    def options(p: CircuitPlan, n_open: int) -> list[dict]:
+        return sorted(
+            (_estimate(c, model_for(p.circuit, c.room, rooms, circuits, taus), outdoor, n_open, now, outdoor_at) for c in p.candidates),
+            key=lambda e: e["start"],
+        )
+
     def best(p: CircuitPlan, n_open: int) -> dict | None:
-        options = [_estimate(c, model_for(p.circuit, c.room, rooms, circuits, taus), outdoor, n_open, now) for c in p.candidates]
-        return min(options, key=lambda e: e["start"]) if options else None
+        found = options(p, n_open)
+        return found[0] if found else None
 
     first = {p.circuit: best(p, 1) for p in plans}
     out = []
@@ -189,10 +218,13 @@ def plan_circuits(plans: list[CircuitPlan], models: tuple, outdoor: float | None
                 if q is not p and q.boiler and q.boiler == p.boiler and first[q.circuit]
                 and first[q.circuit]["start"] < est["event_start"] and first[q.circuit]["event_end"] > est["start"]
             )
-            if overlap:
-                est = best(p, 1 + overlap)
+            n_open = 1 + overlap
+            per_room = options(p, n_open)
+            est = per_room[0]
             est["status"] = (
                 "heat_now" if est["start"] <= now < est["event_start"] else "warm" if est["lead_min"] == 0 else "planned"
             )
-        out.append({"circuit": p.circuit, "boiler": p.boiler, "estimate": est})
+        else:
+            per_room = []
+        out.append({"circuit": p.circuit, "boiler": p.boiler, "estimate": est, "rooms": per_room})
     return out

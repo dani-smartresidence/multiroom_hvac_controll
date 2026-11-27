@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.16.0
+- **Early stop**: heating stops before an event ends, as long as the room loses at most `coast_drop` °C (from its τ).
+- **Dynamic setback**: before an event within `setback_horizon_hours`, rooms are kept above the lowest temperature
+  from which preheating fits in `max_preheat_hours`; otherwise only frost protection.
+- **On track / late** while preheating, with one notification per late event.
+- **Forecast** (`weather_entity`): estimates and setback floors use the forecast of each preheat window.
+- **Estimated start on the room pages**: one switch makes preconditioning use each room's estimated lead.
+- **HA sensors** `sensor.heating_<circuit>_next_start` and `sensor.heating_<circuit>_decision`.
+- **Notifications** (`notify_service`, else persistent notifications): late preheating, a circuit that did not switch,
+  a stopped test, offline room sensors.
+- **Tests A then B** scheduled from the Heating control card; runs during a test are noted "Test A" / "Test B".
+- **Charts**: last 24 h per circuit and per run in the Heating log.
+- **Watchdog blueprint**: fallback automations when the heartbeat is missing after a Home Assistant restart.
+- New options: `coast_drop`, `max_coast_minutes`, `max_preheat_hours`, `setback_horizon_hours`, `late_margin_minutes`,
+  `weather_entity`, `notify_service`.
+
 ## 0.15.0
 - **Heating control** on the Plant tab, one card per boiler, **Shadow** (default, shows what it would do) or
   **Active** (switches the circuit: preset Winter / Summer). A circuit opens for the preheat window from the

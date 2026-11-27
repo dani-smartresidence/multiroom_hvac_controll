@@ -637,6 +637,30 @@ def build_admin_app(portal: Portal) -> web.Application:
             return _json({"error": f"Home Assistant: {err.message}"}, 502)
         return _json(portal.control_view())
 
+    @routes.post("/api/control/experiments/{circuit}")
+    async def experiment(request):
+        data = await admin_body(request)
+        circuit = request.match_info["circuit"]
+        if data.get("cancel"):
+            portal.cancel_experiment(circuit)
+            return _json(portal.control_view())
+        try:
+            portal.schedule_experiment(circuit, data)
+        except KeyError:
+            raise web.HTTPNotFound()
+        except ValueError as err:
+            return _json({"error": str(err)}, 400)
+        return _json(portal.control_view())
+
+    @routes.post("/api/lead_mode")
+    async def lead_mode(request):
+        data = await admin_body(request)
+        try:
+            await portal.set_lead_mode(str(data.get("mode", "")))
+        except ValueError:
+            return _json({"error": "mode must be fixed or estimated"}, 400)
+        return _json(portal.estimates())
+
     @routes.get("/api/estimates")
     async def estimates(_request):
         return _json(portal.estimates())

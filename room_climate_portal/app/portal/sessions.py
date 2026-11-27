@@ -122,6 +122,7 @@ class SessionTracker:
         self.topology = topology
         self.default_target = default_target
         self.runs: dict[str, Run] = {}
+        self.note_for = None  # optional (circuit, start, end) -> note, e.g. "Test A" during an experiment
         self._known: dict[str, bool] = {}
         self._done: list[Run] = []
 
@@ -175,6 +176,7 @@ class SessionTracker:
             base = {
                 "kind": run.kind, "boiler": run.boiler, "circuit": run.circuit, "start": run.start, "end": end,
                 "end_reason": run.end_reason, "outdoor": outdoor, "n_open_max": n_max, "n_open_avg": n_avg,
+                "note": self.note_for(run.circuit, run.start, end) if self.note_for else None,
             }
             for room_id, target in run.rooms or [(None, None)]:
                 row = dict(base, room=room_id, target=target if run.kind == "heat" else None)

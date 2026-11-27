@@ -26,6 +26,8 @@ class FakeHA:
         now = now or datetime.now(TZ)
         self.now = now
         self.service_calls: list[dict] = []
+        self.notifications: list[dict] = []
+        self.forecast_temp = -2.0
         self.published: dict[str, dict] = {}
         self.clients: set[web.WebSocketResponse] = set()
         self.subs: dict[web.WebSocketResponse, dict[int, str]] = {}
@@ -218,6 +220,14 @@ class FakeHA:
                 await ok({"context": {}})
                 await self.set_state(target, data["hvac_mode"], st["attributes"])
                 return
+            if dom == "weather" and svc == "get_forecasts":
+                base = self.now.replace(minute=0, second=0, microsecond=0)
+                hourly = [{"datetime": (base + timedelta(hours=h)).isoformat(), "temperature": self.forecast_temp}
+                          for h in range(48)]
+                return await ok({"context": {}, "response": {target: {"forecast": hourly}}})
+            if dom in ("persistent_notification", "notify"):
+                self.notifications.append({"service": f"{dom}.{svc}", **data})
+                return await ok({"context": {}})
             if dom in ("switch", "automation") and svc in ("turn_on", "turn_off"):
                 st = self.states.get(target)
                 if not st:

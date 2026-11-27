@@ -48,6 +48,13 @@ class Options:
     frost_temp: float = 10.0
     hysteresis: float = 0.3
     min_switch_minutes: int = 10
+    coast_drop: float = 0.5
+    max_coast_minutes: int = 45
+    max_preheat_hours: float = 6.0
+    setback_horizon_hours: float = 24.0
+    late_margin_minutes: int = 10
+    weather_entity: str = ""
+    notify_service: str = ""
 
     @classmethod
     def load(cls, path: Path) -> "Options":

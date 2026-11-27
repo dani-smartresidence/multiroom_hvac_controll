@@ -108,3 +108,29 @@ def test_estimate_history_freezes_and_evaluates(tmp_path):
     row = log.estimates()[0]
     assert row["opened_at"] == ev - 2 * H and row["t_at_event"] == 21.2 and row["reached_at"] == ev - 2 * H + 3 * 1800
     assert row["evaluated"] == 1
+
+
+def test_coast_minutes():
+    from portal.model import coast_minutes
+    # 21 °C, 1 °C outside, tau 10 h: losing 0.5 °C takes 10 * ln(20 / 19.5) h = 15.2 min
+    assert coast_minutes(21.0, 1.0, 10.0, 0.5, 45) == pytest.approx(15.2, abs=0.1)
+    assert coast_minutes(21.0, 1.0, 100.0, 0.5, 45) == 45  # capped
+    assert coast_minutes(21.0, 1.0, None, 0.5, 45) == 0 and coast_minutes(None, 1.0, 10, 0.5, 45) == 0
+
+
+def test_setback_floor():
+    from portal.model import setback_floor
+    m = RoomModel(dead_min=30, rate1=2.0)
+    # 6 h allowed, 45 min of dead time and margin: 5.25 h x 2 °C/h below the target
+    assert setback_floor(m, 21.0, None, 10.0, 6.0) == pytest.approx(21.0 - 10.5)
+    assert setback_floor(m, 21.0, None, 12.0, 6.0) == 12.0  # never below frost protection
+    assert setback_floor(m, 21.0, None, 10.0, 0.5) == 21.0
+
+
+def test_plan_uses_forecast_and_lists_rooms():
+    models = ({}, {"c1": RoomModel(dead_min=30, rate1=1.0, slope=0.1, ref_outdoor=5.0, lo=0.2, hi=5, runs=6, source="circuit")}, {})
+    plans = [CircuitPlan("c1", "b1", [cand("a", 10, 12), cand("b", 20, 22)])]
+    mild = plan_circuits(plans, models, 5.0, NOW)[0]
+    cold = plan_circuits(plans, models, 5.0, NOW, lambda s, e: -5.0)[0]
+    assert [e["room"] for e in mild["rooms"]] == ["a", "b"] and mild["estimate"]["room"] == "a"
+    assert cold["estimate"]["outdoor"] == -5.0 and cold["estimate"]["lead_min"] > mild["estimate"]["lead_min"]

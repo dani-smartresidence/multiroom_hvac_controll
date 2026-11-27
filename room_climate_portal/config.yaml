@@ -1,5 +1,5 @@
 name: Room Climate Portal
-version: "0.15.0"
+version: "0.16.0"
 slug: room_climate_portal
 description: Per-room thermostat pages opened by scanning a QR code in each room
 url: https://github.com/dani-smartresidence/multiroom_hvac_controll
@@ -52,6 +52,13 @@ options:
   frost_temp: 10
   hysteresis: 0.3
   min_switch_minutes: 10
+  coast_drop: 0.5
+  max_coast_minutes: 45
+  max_preheat_hours: 6
+  setback_horizon_hours: 24
+  late_margin_minutes: 10
+  weather_entity: ""
+  notify_service: ""
 schema:
   public_url: url
   base_path: str
@@ -84,3 +91,10 @@ schema:
   frost_temp: float(3,16)
   hysteresis: float(0.1,2)
   min_switch_minutes: int(0,60)
+  coast_drop: float(0,3)
+  max_coast_minutes: int(0,180)
+  max_preheat_hours: float(1,24)
+  setback_horizon_hours: float(0,168)
+  late_margin_minutes: int(0,120)
+  weather_entity: str?
+  notify_service: str?

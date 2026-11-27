@@ -312,6 +312,10 @@ var LOG_Q = "";
         : a.action === "control" ? "Controller: " + esc(a.entity) + " → " + esc(a.new) + " (" + esc(String(a.reason || "").replace(/_/g, " ")) + (a.detail ? ", " + esc(a.detail) : "") + ")"
         : a.action === "control_mode" ? "Heating control " + esc(a.old) + " → " + esc(a.new) + ((a.takeover || []).length ? " · takes over " + esc(a.takeover.join(", ")) : "")
         : a.action === "control_error" ? "Controller could not switch " + esc(a.entity) + ": " + esc(a.error)
+        : a.action === "notify" ? "Notification: " + esc(a.new) + " · " + esc(a.detail)
+        : a.action === "test_scheduled" ? "Test scheduled on " + esc(a.entity) + " for " + new Date(a.new * 1000).toLocaleString([], { timeZone: TZ, dateStyle: "short", timeStyle: "short" })
+        : a.action === "test_cancelled" ? "Test cancelled on " + esc(a.entity)
+        : a.action === "lead_mode" ? "Preconditioning uses the " + (a.new === "estimated" ? "estimated start" : "fixed lead time")
         : a.action === "plant_link" ? "Plant: " + ["boiler", "circuit", "valve", "temperature", "category", "comfort"].filter(function (k) { return k in a; }).map(function (k) { return k + " " + esc(a[k] == null ? "auto" : a[k]); }).join(", ")
         : a.action === "session_note" ? "Heating log note: " + esc(a.note || "removed")
         : a.action === "print_caption" ? "Print text: " + esc(a.new)
@@ -367,6 +371,10 @@ var LOG_Q = "";
         : a.action === "control" ? "Controller: " + esc(a.entity) + " → " + esc(a.new) + " (" + esc(String(a.reason || "").replace(/_/g, " ")) + (a.detail ? ", " + esc(a.detail) : "") + ")"
         : a.action === "control_mode" ? "Heating control " + esc(a.old) + " → " + esc(a.new) + ((a.takeover || []).length ? " · takes over " + esc(a.takeover.join(", ")) : "")
         : a.action === "control_error" ? "Controller could not switch " + esc(a.entity) + ": " + esc(a.error)
+        : a.action === "notify" ? "Notification: " + esc(a.new) + " · " + esc(a.detail)
+        : a.action === "test_scheduled" ? "Test scheduled on " + esc(a.entity) + " for " + new Date(a.new * 1000).toLocaleString([], { timeZone: TZ, dateStyle: "short", timeStyle: "short" })
+        : a.action === "test_cancelled" ? "Test cancelled on " + esc(a.entity)
+        : a.action === "lead_mode" ? "Preconditioning uses the " + (a.new === "estimated" ? "estimated start" : "fixed lead time")
         : a.action === "plant_link" ? "Plant: " + ["boiler", "circuit", "valve", "temperature", "category", "comfort"].filter(function (k) { return k in a; }).map(function (k) { return k + " " + esc(a[k] == null ? "auto" : a[k]); }).join(", ")
         : a.action === "session_note" ? "Heating log note: " + esc(a.note || "removed")
         : a.action === "print_caption" ? "Print text: " + esc(a.new)
