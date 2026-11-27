@@ -51,8 +51,8 @@ class FakeHA:
             {"entity_id": "climate.receptie", "area_id": "receptie", "labels": []},
             {"entity_id": "sensor.outdoor_temperature", "area_id": None, "labels": []},
             # Heating plant: two circuits of one boiler, a valve and a temperature sensor in room 101.
-            {"entity_id": "climate.zone1", "area_id": None, "labels": []},
-            {"entity_id": "climate.zone1_2", "area_id": None, "labels": []},
+            {"entity_id": "climate.sala_plen1", "area_id": None, "labels": []},
+            {"entity_id": "climate.parter1", "area_id": None, "labels": [], "name": "Parter circuit 1"},
             {"entity_id": "switch.camera_101_relay", "area_id": "camera_101", "labels": []},
             {"entity_id": "sensor.camera_101_temperature", "area_id": "camera_101", "labels": []},
         ]
@@ -65,11 +65,11 @@ class FakeHA:
                                "friendly_name": eid},
             }
 
-        def boiler_circuit(eid, zone):
+        def boiler_circuit(eid, zone, name="Sala Plen"):
             return {
                 "entity_id": eid, "state": "heat",
                 "attributes": {"preset_mode": "Summer", "preset_modes": ["Summer", "Winter", "OFF"], "heat_request": 0.0,
-                               "temperature": 19.0, "current_temperature": 0.0, "zone_number": zone, "friendly_name": "Sala Plen"},
+                               "temperature": 19.0, "current_temperature": 0.0, "zone_number": zone, "friendly_name": name},
             }
 
         self.states = {
@@ -82,8 +82,8 @@ class FakeHA:
             "sensor.camera_204_humidity": {"entity_id": "sensor.camera_204_humidity", "state": "44", "attributes": {"device_class": "humidity", "unit_of_measurement": "%"}},
             "sensor.outdoor_temperature": {"entity_id": "sensor.outdoor_temperature", "state": "6.0", "attributes": {"unit_of_measurement": "°C"}},
             "calendar.camera_204": {"entity_id": "calendar.camera_204", "state": "off", "attributes": {}},
-            "climate.zone1": boiler_circuit("climate.zone1", 1),
-            "climate.zone1_2": boiler_circuit("climate.zone1_2", 2),
+            "climate.sala_plen1": boiler_circuit("climate.sala_plen1", 1),
+            "climate.parter1": boiler_circuit("climate.parter1", 1, "Parter"),
             "switch.camera_101_relay": {"entity_id": "switch.camera_101_relay", "state": "off", "attributes": {}},
             "sensor.camera_101_temperature": {"entity_id": "sensor.camera_101_temperature", "state": "17.0", "attributes": {"device_class": "temperature", "unit_of_measurement": "°C"}},
             "calendar.camera_101": {"entity_id": "calendar.camera_101", "state": "off", "attributes": {}},

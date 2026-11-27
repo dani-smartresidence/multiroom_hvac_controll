@@ -242,6 +242,22 @@ class DataLog:
                 )
         return len(due)
 
+    def rename_circuits(self, renamed: dict[str, str]) -> int:
+        """Move logged rows to a circuit's new entity id (idempotent)."""
+        n = 0
+        with self._lock:
+            for old, new in renamed.items():
+                prefix, to = f"circuit:{old}:", f"circuit:{new}:"
+                n += self._db.execute(
+                    "UPDATE samples SET key = ? || substr(key, ?) WHERE substr(key, 1, ?) = ?",
+                    (to, len(prefix) + 1, len(prefix), prefix),
+                ).rowcount
+                n += self._db.execute("UPDATE sessions SET circuit = ? WHERE circuit = ?", (new, old)).rowcount
+                n += self._db.execute("UPDATE OR IGNORE estimates SET circuit = ? WHERE circuit = ?", (new, old)).rowcount
+                for key in [k for k in self._last if k.startswith(prefix)]:
+                    self._last[to + key[len(prefix):]] = self._last.pop(key)
+        return n
+
     def close(self) -> None:
         self.flush_sync()
         with self._lock:

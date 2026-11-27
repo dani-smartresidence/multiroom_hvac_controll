@@ -19,7 +19,7 @@ from .rooms import Room, _entity_area, clamp_setpoint, discover, load_overrides
 from .schedule import build_events, next_precondition
 from .sessions import SessionTracker, room_key
 from .tokens import TokenStore
-from .topology import Topology, is_circuit_open, is_valve_open, room_temperature
+from .topology import RENAMED_CIRCUITS, Topology, is_circuit_open, is_valve_open, room_temperature
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -95,6 +95,8 @@ class Portal:
         self._running_events: dict[tuple, dict] = {}  # (room, start, summary) -> event, while it heats
         self.topology = Topology(paths.topology)
         self.datalog = DataLog(paths.heating_db)
+        self.datalog.rename_circuits(RENAMED_CIRCUITS)
+        self._entity_names: dict[str, str] = {}  # names set by the user in the entity registry
         self.sessions = SessionTracker(self.datalog, self.topology, options.default_target_temp)
         self._plant_index: dict[str, list[tuple[str, str | None]]] = {}  # entity -> [(kind, room/circuit)]
         self.models = fit_models(self.datalog.sessions(limit=MODEL_SESSIONS))
@@ -152,6 +154,7 @@ class Portal:
         if self.options.outdoor_sensor:
             index[self.options.outdoor_sensor].update(self.rooms)
         self._entity_rooms = dict(index)
+        self._entity_names = {e["entity_id"]: e["name"] for e in entities if e.get("name")}
         members: dict[str, list[str]] = defaultdict(list)
         dev_by_id = {d["id"]: d for d in devices}
         for entry in entities:
@@ -329,6 +332,7 @@ class Portal:
             attrs = (self.states.get(c["circuit"]) or {}).get("attributes") or {}
             c["boiler_name"] = b.name if b else c["boiler"]
             c["zone"] = attrs.get("zone_number")
+            c["name"] = self._entity_names.get(c["circuit"]) or attrs.get("friendly_name") or c["circuit"]
             c["open_now"] = is_circuit_open(self.states.get(c["circuit"]))
             if c["estimate"]:
                 c["estimate"]["room_name"] = names.get(c["estimate"]["room"], c["estimate"]["room"])
@@ -352,7 +356,7 @@ class Portal:
                 circuits.append(
                     {
                         "entity_id": c,
-                        "name": attrs.get("friendly_name") or c,
+                        "name": self._entity_names.get(c) or attrs.get("friendly_name") or c,
                         "zone": attrs.get("zone_number"),
                         "available": bool(st) and st.get("state") not in ("unavailable", "unknown"),
                         "open": is_circuit_open(st),

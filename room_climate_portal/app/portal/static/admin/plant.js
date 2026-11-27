@@ -48,9 +48,7 @@
     var r = PLANT && PLANT.rooms.filter(function (x) { return x.room_id === id; })[0];
     return r ? r.name : id;
   }
-  function circuitLabel(c) {
-    return (c.zone != null ? "Circuit " + c.zone : c.name) + " · " + c.entity_id;
-  }
+  function circuitLabel(c) { return c.name + " · " + c.entity_id; }
   function loadPlant() {
     return fetch("api/plant").then(function (r) { return r.json(); }).then(function (p) {
       PLANT = p;
@@ -89,7 +87,7 @@
         (e.n_open > 1 ? " (" + e.n_open + " circuits of " + esc(c.boiler_name) + " heat at the same time, so " + Math.round(e.share * 100) + "% of " + num(e.rate_alone, 2) + " °C/h)" : "") +
         " + " + minutes(e.margin_min) + " margin = <b>" + minutes(e.lead_min) + "</b>";
     var diff = e.fixed_start - e.start;
-    return "<tr><td><b>" + esc(c.boiler_name) + "</b>" + (c.zone != null ? " · circuit " + esc(c.zone) : "") +
+    return "<tr><td><b>" + esc(c.name) + '</b><div class="muted">' + esc(c.boiler_name) + "</div>" +
       '<div class="mono muted">' + esc(c.circuit) + '</div><div class="muted">' + (c.open_now ? "open now" : "closed now") + "</div></td>" +
       "<td><b>" + esc(e.room_name) + "</b><div>" + esc(e.event_summary) + '</div><div class="muted">' + esc(day(e.event_start)) + " · target " + num(e.target) + " °C</div></td>" +
       '<td><span class="est-start">' + hhmm(e.start) + '</span><div class="muted">' + minutes(e.lead_min) + " before</div>" + status + "</td>" +
