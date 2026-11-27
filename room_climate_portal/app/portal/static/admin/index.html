@@ -92,6 +92,17 @@
 </main>
 <main id="view-plant" hidden>
   <p class="sub">Which boiler circuit heats each room, its valve and its temperature sensor. Values marked <span class="guess">guess</span> come from the room's Area until you pick one. Nothing here switches heating yet: the links tell the heating log what to record.</p>
+  <h2>Start estimates <span class="th-sub">shown only, nothing is switched</span></h2>
+  <p class="sub" id="est-sub"></p>
+  <div class="scroll">
+    <table id="estimates">
+      <thead><tr><th>Circuit</th><th>Next event</th><th>Estimated start</th><th>How it is calculated</th><th>Room now → at start</th><th>Data</th><th>Lead time now</th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </div>
+  <p class="empty" id="est-empty" hidden>No estimate yet: link rooms to circuits below. A circuit gets an estimate when one of its rooms has a timed event in the calendar.</p>
+  <p class="sub" id="est-unlinked" hidden></p>
+  <h2>Boilers</h2>
   <div class="boilers" id="boilers"></div>
   <h2>Rooms</h2>
   <div class="scroll">
@@ -116,6 +127,14 @@
     </table>
   </div>
   <p class="empty" id="sess-empty" hidden>No heating runs yet. Rows appear after a circuit has been on for at least 10 minutes and then closes.</p>
+  <h2>Estimates vs what happened</h2>
+  <p class="sub">The last estimate made before each event's estimated start, next to what really happened. Use it to judge the estimates before they switch anything.</p>
+  <div class="scroll">
+    <table id="est-history">
+      <thead><tr><th>Event</th><th>Circuit · room</th><th>Estimated start</th><th>Lead time now</th><th>Circuit opened</th><th>Room at event start</th><th>Reached target</th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </div>
 </main>
 <div class="flash" id="flash" role="status" hidden></div>
 <div class="dlg-back" id="dlg" hidden>

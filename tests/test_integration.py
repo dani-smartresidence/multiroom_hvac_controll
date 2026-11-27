@@ -620,3 +620,21 @@ async def test_heating_run_is_logged(env, monkeypatch):
     assert [v for _, v in series][-3:] == [17.0, 17.5, 18.2]
     page = await (await admin.get("/")).text()
     assert "static/plant.js?v=" in page and 'id="view-plant"' in page
+
+
+async def test_start_estimates(env):
+    fake, portal, _, admin = env
+    d = await (await admin.get("/api/estimates")).json()
+    assert d["circuits"] == [] and d["outdoor"] == 6.0
+    assert [u["room"] for u in d["unlinked"]] == ["camera_204", "camera_101"]  # events, no circuit yet; soonest first
+    await admin.post("/api/plant/rooms/camera_204", json={"circuit": "climate.zone1", "temperature": "sensor.camera_101_temperature"})
+    d = await (await admin.get("/api/estimates")).json()
+    c = d["circuits"][0]
+    e = c["estimate"]
+    assert c["circuit"] == "climate.zone1" and c["boiler_name"] == "Sala Plen" and e["room"] == "camera_204"
+    assert e["event_summary"] == "Ședința consiliului" and e["target"] == 22  # the event's own target wins
+    assert e["t_now"] == 17.0 and e["confidence"] == "none" and e["fixed_lead_min"] == 120
+    assert e["lead_min"] == round(40 + 5 * 60 / 1.5 + 15)
+    await portal.log_tick()
+    hist = await (await admin.get("/api/estimates/history")).json()
+    assert hist[0]["circuit"] == "climate.zone1" and hist[0]["lead_min"] == e["lead_min"]

@@ -174,6 +174,33 @@ than 120 days are averaged to 15 minutes. The **Heating log** tab lists the runs
 Add a note to a run to mark a test, for example "Test A, one circuit". Nothing in this version switches
 heating on or off: preconditioning still uses the lead time.
 
+## 10. Start estimates (shown only)
+
+The **Plant** tab opens with one row per circuit that has a linked room with a timed event coming up.
+The row shows the room that needs heat first, when the circuit should open for it, and how that time is
+calculated:
+
+```
+lead = dead time + (target − room temperature at the start) ÷ heating rate + 15 min margin
+```
+
+- **Dead time and heating rate** come from the room's heat runs in the Heating log. If the room has none,
+  the runs of other rooms on the same circuit are used. Without any runs, the defaults are 40 min and 1.5 °C/h.
+  The badge says how many runs were used.
+- **Shared boiler**: when other circuits of the same boiler heat at the same time, the boiler's power is shared
+  (2 circuits: 67 % each, 3 circuits: 50 %), so the start moves earlier.
+- **Outdoor temperature**: with 5 runs or more spread over at least 4 °C of outdoor temperature, the rate also
+  follows the outdoor temperature.
+- **Cooling until the start**: once the room has a τ from a cool run, the estimate predicts how far the room
+  cools before the circuit opens.
+- **Target**: the event's `target:` line, else the room's comfort temperature from the Plant tab, else
+  `default_target_temp`.
+- **Lead time now**: the fixed lead time that preconditioning really uses, for comparison.
+
+The **Heating log** tab ends with **Estimates vs what happened**: the last estimate made before each event's
+estimated start, then, once the event is over, when the circuit really opened, the room temperature when the
+event started and when the room reached its target. Nothing switches heating on its own in this version.
+
 ## Security
 
 - Each code is a 128-bit random-looking token (HMAC of a secret in `/data`); room numbers are never in the URL.

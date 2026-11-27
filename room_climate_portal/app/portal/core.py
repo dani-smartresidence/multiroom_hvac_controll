@@ -14,6 +14,7 @@ from .datalog import DataLog
 from .ha import HAClient, HAError
 from .pins import PinStore
 from .holds import DefaultsStore, HoldError, HoldStore, parse_hhmm
+from .model import Candidate, CircuitPlan, fit_models, plan_circuits
 from .rooms import Room, _entity_area, clamp_setpoint, discover, load_overrides
 from .schedule import build_events, next_precondition
 from .sessions import SessionTracker, room_key
@@ -25,6 +26,7 @@ _LOGGER = logging.getLogger(__name__)
 SCHEDULE_REFRESH_S = 300
 DATALOG_INTERVAL_S = 60
 PRUNE_INTERVAL_S = 86400
+MODEL_SESSIONS = 5000
 MAX_LEAD_MINUTES = 600
 DEFAULT_LEAD_MINUTES = 120
 DEFAULT_PRINT_CAPTION = "Scanează- Termostat"
@@ -95,6 +97,7 @@ class Portal:
         self.datalog = DataLog(paths.heating_db)
         self.sessions = SessionTracker(self.datalog, self.topology, options.default_target_temp)
         self._plant_index: dict[str, list[tuple[str, str | None]]] = {}  # entity -> [(kind, room/circuit)]
+        self.models = fit_models(self.datalog.sessions(limit=MODEL_SESSIONS))
         ha.on_connect = self._on_connect
         ha.on_disconnect = self._on_disconnect
 
@@ -259,7 +262,78 @@ class Portal:
         self.sample_plant(now)
         runs = self.sessions.take_done(now)
         await self.datalog.flush()
-        return await asyncio.to_thread(self.sessions.finalize, runs) if runs else []
+        ids = await asyncio.to_thread(self.sessions.finalize, runs) if runs else []
+        if ids or not any(self.models):
+            rows = await asyncio.to_thread(self.datalog.sessions, MODEL_SESSIONS)
+            self.models = fit_models(rows)
+        await asyncio.to_thread(self._save_estimates, self.estimates(now), now)
+        return ids
+
+    def _save_estimates(self, data: dict, now: int) -> None:
+        for c in data["circuits"]:
+            e = c["estimate"]
+            if not e:
+                continue
+            self.datalog.save_estimate(
+                {
+                    "circuit": c["circuit"], "event_start": e["event_start"], "room": e["room"], "event_end": e["event_end"],
+                    "event_summary": e["event_summary"], "target": e["target"], "est_start": e["start"],
+                    "lead_min": e["lead_min"], "fixed_lead_min": e["fixed_lead_min"], "computed_at": now,
+                    "confidence": e["confidence"], "runs": e["runs"], "n_open": e["n_open"], "rate": e["rate"],
+                    "dead_min": e["dead_min"], "t_now": e["t_now"], "t_at_start": e["t_at_start"], "outdoor": e["outdoor"],
+                }
+            )
+        self.datalog.evaluate_estimates(now)
+
+    def estimates(self, now: int | None = None) -> dict:
+        """Shadow estimates: when each circuit should open for its rooms' next events. Nothing is switched."""
+        now = int(now if now is not None else time.time())
+        outdoor = _float((self.states.get(self.options.outdoor_sensor) or {}).get("state")) if self.options.outdoor_sensor else None
+        plans, unlinked = [], []
+        for room_id, link in self.topology.links.items():
+            room = self.rooms.get(room_id)
+            if room is None or link.category != "event":
+                continue
+            ev = next(
+                (e for e in self.schedules.get(room_id, []) if not e["all_day"] and datetime.fromisoformat(e["start"]).timestamp() > now),
+                None,
+            )
+            if ev is None:
+                continue
+            if not link.circuit:
+                unlinked.append({"room": room_id, "name": room.name, "event_summary": ev["summary"],
+                                 "event_start": int(datetime.fromisoformat(ev["start"]).timestamp())})
+                continue
+            t_now = room_temperature(link, self.states)
+            target = ev["target"] if ev.get("target_set") or link.comfort is None else link.comfort
+            cand = Candidate(
+                room=room_id,
+                event_summary=ev["summary"],
+                event_start=int(datetime.fromisoformat(ev["start"]).timestamp()),
+                event_end=int(datetime.fromisoformat(ev["end"]).timestamp()),
+                target=float(target),
+                t_now=t_now if t_now is not None else self.options.setback_temp,
+                fixed_lead_min=self.lead_minutes(room),
+                assumed_temp=t_now is None,
+            )
+            plan = next((p for p in plans if p.circuit == link.circuit), None)
+            if plan is None:
+                boiler = self.topology.boiler_of_circuit(link.circuit)
+                plan = CircuitPlan(link.circuit, boiler.id if boiler else None)
+                plans.append(plan)
+            plan.candidates.append(cand)
+        circuits = plan_circuits(plans, self.models, outdoor, now)
+        names = {r: self.rooms[r].name for r in self.rooms}
+        for c in circuits:
+            b = self.topology.boiler(c["boiler"])
+            attrs = (self.states.get(c["circuit"]) or {}).get("attributes") or {}
+            c["boiler_name"] = b.name if b else c["boiler"]
+            c["zone"] = attrs.get("zone_number")
+            c["open_now"] = is_circuit_open(self.states.get(c["circuit"]))
+            if c["estimate"]:
+                c["estimate"]["room_name"] = names.get(c["estimate"]["room"], c["estimate"]["room"])
+        circuits.sort(key=lambda c: c["estimate"]["start"] if c["estimate"] else 0)
+        return {"now": now, "outdoor": outdoor, "circuits": circuits, "unlinked": sorted(unlinked, key=lambda u: u["event_start"])}
 
     def update_link(self, room_id: str, values: dict, client: str = "admin"):
         link = self.topology.update_room(room_id, values)

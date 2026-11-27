@@ -44,7 +44,38 @@ CREATE TABLE IF NOT EXISTS sessions (
     note TEXT
 );
 CREATE INDEX IF NOT EXISTS sessions_start ON sessions (start);
+CREATE TABLE IF NOT EXISTS estimates (
+    circuit TEXT NOT NULL,
+    event_start INTEGER NOT NULL,
+    room TEXT,
+    event_end INTEGER,
+    event_summary TEXT,
+    target REAL,
+    est_start INTEGER,
+    lead_min REAL,
+    fixed_lead_min REAL,
+    computed_at INTEGER,
+    confidence TEXT,
+    runs INTEGER,
+    n_open INTEGER,
+    rate REAL,
+    dead_min REAL,
+    t_now REAL,
+    t_at_start REAL,
+    outdoor REAL,
+    opened_at INTEGER,       -- filled after the event: when the circuit really opened
+    t_at_event REAL,         -- room temperature when the event started
+    reached_at INTEGER,      -- when the room reached the target
+    evaluated INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (circuit, event_start)
+);
 """
+ESTIMATE_COLUMNS = (
+    "circuit", "event_start", "room", "event_end", "event_summary", "target", "est_start", "lead_min", "fixed_lead_min",
+    "computed_at", "confidence", "runs", "n_open", "rate", "dead_min", "t_now", "t_at_start", "outdoor",
+)
+EVALUATION_COLUMNS = ("opened_at", "t_at_event", "reached_at", "evaluated")
+OPEN_LOOKBACK_S = 12 * 3600
 SESSION_COLUMNS = (
     "kind", "boiler", "circuit", "room", "start", "end", "end_reason", "t_start", "t_end", "target", "outdoor",
     "n_open_max", "n_open_avg", "dead_time_min", "rate_c_per_h", "reached_min", "tau_h", "note",
@@ -138,8 +169,11 @@ class DataLog:
             )
             return int(cur.lastrowid)
 
-    def sessions(self, limit: int = 200, circuit: str | None = None, room: str | None = None) -> list[dict]:
+    def sessions(self, limit: int = 200, circuit: str | None = None, room: str | None = None, kind: str | None = None) -> list[dict]:
         where, args = [], []
+        if kind:
+            where.append("kind = ?")
+            args.append(kind)
         if circuit:
             where.append("circuit = ?")
             args.append(circuit)
@@ -158,6 +192,55 @@ class DataLog:
     def set_note(self, session_id: int, note: str | None) -> bool:
         with self._lock:
             return self._db.execute("UPDATE sessions SET note = ? WHERE id = ?", (note or None, int(session_id))).rowcount > 0
+
+    # ---------------------------------------------------------------- estimates
+    def save_estimate(self, row: dict) -> None:
+        """Keep the latest estimate for an event until its estimated start; after that it stays frozen."""
+        cols = list(ESTIMATE_COLUMNS)
+        update = ", ".join(f"{c} = excluded.{c}" for c in cols if c not in ("circuit", "event_start"))
+        with self._lock:
+            self._db.execute(
+                f"""INSERT INTO estimates ({', '.join(cols)}) VALUES ({', '.join('?' for _ in cols)})
+                    ON CONFLICT (circuit, event_start) DO UPDATE SET {update}
+                    WHERE estimates.evaluated = 0 AND estimates.est_start > excluded.computed_at""",
+                [row.get(c) for c in cols],
+            )
+
+    def estimates(self, limit: int = 100) -> list[dict]:
+        cols = ESTIMATE_COLUMNS + EVALUATION_COLUMNS
+        with self._lock:
+            rows = self._db.execute(
+                f"SELECT {', '.join(cols)} FROM estimates ORDER BY event_start DESC LIMIT ?", (int(limit),)
+            ).fetchall()
+        return [dict(zip(cols, r)) for r in rows]
+
+    def evaluate_estimates(self, now: float | None = None) -> int:
+        """After an event ends, note when its circuit really opened and when the room got warm."""
+        now = int(now or time.time())
+        with self._lock:
+            due = self._db.execute(
+                "SELECT circuit, event_start, event_end, room, target FROM estimates WHERE evaluated = 0 AND event_end <= ?",
+                (now,),
+            ).fetchall()
+        for circuit, start, end, room, target in due:
+            temps = self.series(f"room:{room}:temp", start - OPEN_LOOKBACK_S, end) if room else []
+            on = self.series(f"circuit:{circuit}:on", start - OPEN_LOOKBACK_S, start)
+            t_at = next((v for t, v in reversed(temps) if t <= start), None)
+            opened = None
+            for (_, a), (t, b) in zip(on, on[1:]):
+                if a == 0 and b == 1:
+                    opened = t
+            crossings = [t for (_, a), (t, b) in zip(temps, temps[1:]) if target is not None and a < target <= b]
+            if t_at is not None and target is not None and t_at >= target:
+                reached = max((t for t in crossings if t <= start), default=temps[0][0] if temps else None)
+            else:
+                reached = min((t for t in crossings if t > start), default=None)
+            with self._lock:
+                self._db.execute(
+                    "UPDATE estimates SET opened_at = ?, t_at_event = ?, reached_at = ?, evaluated = 1 WHERE circuit = ? AND event_start = ?",
+                    (opened, t_at, reached, circuit, start),
+                )
+        return len(due)
 
     def close(self) -> None:
         self.flush_sync()
