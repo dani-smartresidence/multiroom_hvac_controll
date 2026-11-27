@@ -240,6 +240,47 @@ does not wait). A room valve is open only while its own room needs heat.
 
 Every switch the add-on makes is in Recent changes ("Controller: … → Winter (preheat, …)").
 
+## 12. Saving energy, warnings, tests and charts
+
+**Early stop (coast).** Once the room has a τ from a cool run, heating stops before an event ends: as long
+as the room loses at most `coast_drop` °C (default 0.5) by the end, capped at `max_coast_minutes` (45).
+A room already 1 °C under its target keeps heating.
+
+**Dynamic setback.** Before an event within `setback_horizon_hours` (24 h), each room is kept above a floor:
+the lowest temperature from which preheating still fits in `max_preheat_hours` (6 h), given its learned
+dead time and rate (and the forecast). Farther from an event only frost protection applies, so the room can
+cool down as far as it likes. The Heating control card shows each room's floor.
+
+**On track or late.** While a circuit preheats, the add-on projects when the room reaches its target from what
+the room really does. If that is more than `late_margin_minutes` (10) after the event starts, the card says
+"late" and you get one notification per event.
+
+**Forecast.** Set `weather_entity` (e.g. `weather.forecast_home`). Estimates and setback floors then use the
+forecast temperature of each preheat window instead of the temperature now.
+
+**Estimated start on the room pages.** At the top of the start estimates, choose *Estimated start* to make the
+room pages, `sensor.<room>_next_precondition` and the "event running" window use each room's estimated lead
+for its next event instead of the fixed lead time. *Fixed lead time* goes back.
+
+**Sensors in HA**, updated every minute: `sensor.heating_<circuit>_next_start` (timestamp; room, event, lead,
+confidence) and `sensor.heating_<circuit>_decision` (open/closed; reason, mode, late), e.g.
+`sensor.heating_sala_plen1_next_start`.
+
+**Notifications** go to `notify_service` (e.g. `notify.mobile_app_phone`), else to HA's notification panel:
+late preheating, a circuit that did not switch within 5 minutes of a command, a test stopped by an event,
+and once a day the linked room sensors that are offline.
+
+**Tests.** On an Active boiler, *Run a test (A then B)* schedules, for example tonight at 22:00, test A (open
+until the room is 3 °C warmer or 4 h pass) then test B (closed for 8 h). Runs made during a test get the
+note "Test A" or "Test B" in the Heating log. A test is refused if an event (with its lead time) falls inside
+it, and stops if the circuit is needed.
+
+**Charts.** *Last 24 h* on each circuit, and *Chart* on each run in the Heating log: room temperature,
+outdoor temperature and the periods the circuit was open.
+
+**Watchdog after a restart.** In the watchdog automation, pick the same automations as *Fallback automations*:
+if the heartbeat has not come back within 15 minutes of Home Assistant starting, they are turned on.
+
 ## Security
 
 - Each code is a 128-bit random-looking token (HMAC of a secret in `/data`); room numbers are never in the URL.

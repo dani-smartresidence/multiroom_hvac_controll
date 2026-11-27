@@ -3,8 +3,9 @@ blueprint:
   description: >-
     If the Room Climate Portal add-on stops publishing its heartbeat while it switches boiler circuits,
     turn the automations it took over back on, so your own heating automations run the building again,
-    and show a notification. Create one automation from this blueprint; it needs no list of automations,
-    it reads them from the heartbeat.
+    and show a notification. The automations are read from the heartbeat. After a Home Assistant restart
+    the heartbeat only comes back once the add-on runs again: if it is still missing after the set
+    minutes, the fallback automations are turned on instead.
   domain: automation
   source_url: https://github.com/dani-smartresidence/multiroom_hvac_controll/blob/main/blueprints/automation/heating_watchdog.yaml
   input:
@@ -23,37 +24,77 @@ blueprint:
           min: 5
           max: 120
           unit_of_measurement: min
+    fallback:
+      name: Fallback automations
+      description: >-
+        Turned on when the heartbeat is missing altogether after a restart. Pick the same automations
+        as the boilers' takeover automations in the add-on.
+      default: []
+      selector:
+        entity:
+          multiple: true
+          filter:
+            - domain: automation
 
 mode: single
 
 triggers:
   - trigger: time_pattern
     minutes: "/5"
+    id: tick
+  - trigger: homeassistant
+    event: start
+    id: start
 
 variables:
   hb: !input heartbeat
   stale: !input stale_minutes
+  fallback: !input fallback
   autos: "{{ state_attr(hb, 'takeover_automations') or [] }}"
   last: >-
     {% set s = states[hb] %}
     {% set t = as_datetime(s.state, none) if s and s.state not in ['unknown', 'unavailable'] else none %}
     {{ (t or (s.last_changed if s else now())) | string }}
 
-conditions:
-  - condition: template
-    value_template: "{{ autos | count > 0 and as_datetime(last) < now() - timedelta(minutes=stale | int) }}"
-  - condition: template
-    value_template: "{{ expand(autos) | selectattr('state', 'eq', 'off') | list | count > 0 }}"
-
 actions:
-  - action: automation.turn_on
-    target:
-      entity_id: "{{ autos }}"
-  - action: persistent_notification.create
-    data:
-      notification_id: heating_watchdog
-      title: Heating controller stopped
-      message: >-
-        No heartbeat from the Room Climate Portal add-on since {{ as_timestamp(last) | timestamp_custom('%H:%M') }}.
-        These automations were turned back on: {{ autos | join(', ') }}.
-        Check the add-on, then set its boilers to Active again from the Plant tab.
+  - choose:
+      - conditions:
+          - condition: trigger
+            id: start
+        sequence:
+          - wait_template: "{{ states[hb] is not none and states(hb) not in ['unknown', 'unavailable'] }}"
+            timeout:
+              minutes: !input stale_minutes
+          - if:
+              - condition: template
+                value_template: "{{ not wait.completed and fallback | count > 0 }}"
+            then:
+              - action: automation.turn_on
+                target:
+                  entity_id: "{{ fallback }}"
+              - action: persistent_notification.create
+                data:
+                  notification_id: heating_watchdog
+                  title: Heating controller did not start
+                  message: >-
+                    No heartbeat from the Room Climate Portal add-on {{ stale }} minutes after Home Assistant
+                    started. These automations were turned back on: {{ fallback | join(', ') }}.
+      - conditions:
+          - condition: trigger
+            id: tick
+          - condition: template
+            value_template: "{{ autos | count > 0 and as_datetime(last) < now() - timedelta(minutes=stale | int) }}"
+          - condition: template
+            value_template: "{{ expand(autos) | selectattr('state', 'eq', 'off') | list | count > 0 }}"
+        sequence:
+          - action: automation.turn_on
+            target:
+              entity_id: "{{ autos }}"
+          - action: persistent_notification.create
+            data:
+              notification_id: heating_watchdog
+              title: Heating controller stopped
+              message: >-
+                No heartbeat from the Room Climate Portal add-on since {{ as_timestamp(last) | timestamp_custom('%H:%M') }}.
+                These automations were turned back on: {{ autos | join(', ') }}.
+                Check the add-on, then set its boilers to Active again from the Plant tab.
