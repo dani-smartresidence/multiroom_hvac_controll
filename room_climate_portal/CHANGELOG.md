@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.14.0
+- Only the **first circuit of each boiler** is used, under the entity ids renamed in HA: `climate.zone1` →
+  `climate.salamare1`, `climate.zone2` → `climate.parter1`, `climate.etaj_1` → `climate.etaj1`,
+  `climate.ariston_b4bfe94a5d38_1` → `climate.demisol1`.
+- On start, `/data/topology.json` drops the second and third circuits seeded by 0.12 and moves room links to the new ids.
+  Logged samples, heating runs and estimates in `/data/heating.db` move to the new ids too.
+- Circuits are shown under their entity registry name (SalaMare1, Parter1, Etaj1, Demisol1) in the Plant tab and the
+  start estimates.
+
 ## 0.13.0
 - **Start estimates** at the top of the Plant tab, one row per circuit. Each row shows the room that needs heat
   first, its next event and the estimated start, with the calculation spelled out: dead time, heating rate, share

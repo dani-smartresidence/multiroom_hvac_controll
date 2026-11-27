@@ -152,14 +152,16 @@ the live temperatures, the next event and its QR code. **Print all QR codes** gi
 
 ## 9. Heating plant and heating log
 
-The **Plant** tab of the admin page shows each boiler with its three circuits (open or closed, preset,
+The **Plant** tab of the admin page shows each boiler with the circuit it uses (open or closed, preset,
 heat request) and a table that links every room to the circuit that heats it, its valve (a switch on the
 manifold, if it has one) and its temperature sensor. Values marked *guess* come from the room's Area: a
 `*_relay` switch becomes the valve, the Area's temperature sensor the sensor. Pick a value to keep it,
 pick "–" to go back to the guess. **Heating** sets whether a room follows calendar events, only needs frost
 protection, or is not heated at all.
 
-Boilers are created on first start from the circuits found in HA and saved in `/data/topology.json`.
+Boilers are created on first start and saved in `/data/topology.json`. Only the first circuit of each
+boiler is used: `climate.salamare1`, `climate.parter1`, `climate.etaj1` and `climate.demisol1`. The add-on
+shows each circuit under its name from the entity registry (SalaMare1 and so on).
 A circuit counts as open while its preset is `Winter` or its `heat_request` is above 0.
 
 The add-on records the room temperatures, the outdoor temperature (`outdoor_sensor`), every circuit and

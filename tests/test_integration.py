@@ -571,45 +571,45 @@ async def test_print_caption(env):
 async def test_plant_view_and_link(env):
     fake, portal, _, admin = env
     p = await (await admin.get("/api/plant")).json()
-    assert [(b["id"], [c["entity_id"] for c in b["circuits"]]) for b in p["boilers"]] == [
-        ("sala_plen", ["climate.zone1", "climate.zone1_2"])
+    assert [(b["id"], [(c["entity_id"], c["name"]) for c in b["circuits"]]) for b in p["boilers"]] == [
+        ("sala_plen", [("climate.salamare1", "SalaMare1")]), ("parter", [("climate.parter1", "Parter1")])
     ]
     r101 = next(r for r in p["rooms"] if r["room_id"] == "camera_101")
     assert r101["valve"] == "switch.camera_101_relay" and "valve" in r101["guessed"]
     assert r101["temperature"] == "sensor.camera_101_temperature" and r101["temp_now"] == 17.0
     assert "no_circuit" in r101["issues"]
 
-    r = await admin.post("/api/plant/rooms/camera_101", json={"circuit": "climate.zone1"})
+    r = await admin.post("/api/plant/rooms/camera_101", json={"circuit": "climate.salamare1"})
     assert r.status == 200
     p = await r.json()
     assert next(r for r in p["rooms"] if r["room_id"] == "camera_101")["boiler"] == "sala_plen"
     assert p["boilers"][0]["circuits"][0]["rooms"] == ["camera_101"]
     assert (await admin.post("/api/plant/rooms/camera_101", json={"circuit": "climate.nope"})).status == 400
-    assert (await admin.post("/api/plant/rooms/nope", json={"circuit": "climate.zone1"})).status == 404
+    assert (await admin.post("/api/plant/rooms/nope", json={"circuit": "climate.salamare1"})).status == 404
     assert portal.audit.tail(1)[0]["action"] == "plant_link"
 
 
 async def test_heating_run_is_logged(env, monkeypatch):
     fake, portal, _, admin = env
     monkeypatch.setattr("portal.sessions.MIN_HEAT_S", 0)
-    await admin.post("/api/plant/rooms/camera_101", json={"circuit": "climate.zone1", "comfort": 18})
+    await admin.post("/api/plant/rooms/camera_101", json={"circuit": "climate.salamare1", "comfort": 18})
     await portal.log_tick()  # baseline: zone1 closed
-    zone1 = fake.states["climate.zone1"]
-    await fake.set_state("climate.zone1", "heat", dict(zone1["attributes"], preset_mode="Winter", heat_request=1.0))
+    zone1 = fake.states["climate.salamare1"]
+    await fake.set_state("climate.salamare1", "heat", dict(zone1["attributes"], preset_mode="Winter", heat_request=1.0))
     await fake.set_state("switch.camera_101_relay", "on", {})
     for v in ("17.0", "17.5", "18.2"):
         await fake.set_state("sensor.camera_101_temperature", v, {"device_class": "temperature"})
     await asyncio.sleep(0.2)
-    assert portal.datalog.last("circuit:climate.zone1:on") == 1.0
+    assert portal.datalog.last("circuit:climate.salamare1:on") == 1.0
     assert portal.datalog.last("valve:switch.camera_101_relay") == 1.0
     assert portal.datalog.last("room:camera_101:temp") == 18.2
     assert portal.datalog.last("outdoor") == 6.0
-    await fake.set_state("climate.zone1", "heat", dict(zone1["attributes"], preset_mode="Summer", heat_request=0.0))
+    await fake.set_state("climate.salamare1", "heat", dict(zone1["attributes"], preset_mode="Summer", heat_request=0.0))
     await asyncio.sleep(0.2)
     ids = await portal.log_tick()
     assert len(ids) == 1
     rows = await (await admin.get("/api/sessions")).json()
-    assert rows[0]["kind"] == "heat" and rows[0]["room"] == "camera_101" and rows[0]["circuit"] == "climate.zone1"
+    assert rows[0]["kind"] == "heat" and rows[0]["room"] == "camera_101" and rows[0]["circuit"] == "climate.salamare1"
     assert rows[0]["t_end"] == 18.2 and rows[0]["target"] == 18  # all samples share one second here
     r = await admin.post(f"/api/sessions/{rows[0]['id']}/note", json={"note": "Test A"})
     assert (await r.json())["note"] == "Test A"
@@ -627,14 +627,15 @@ async def test_start_estimates(env):
     d = await (await admin.get("/api/estimates")).json()
     assert d["circuits"] == [] and d["outdoor"] == 6.0
     assert [u["room"] for u in d["unlinked"]] == ["camera_204", "camera_101"]  # events, no circuit yet; soonest first
-    await admin.post("/api/plant/rooms/camera_204", json={"circuit": "climate.zone1", "temperature": "sensor.camera_101_temperature"})
+    await admin.post("/api/plant/rooms/camera_204", json={"circuit": "climate.salamare1", "temperature": "sensor.camera_101_temperature"})
     d = await (await admin.get("/api/estimates")).json()
     c = d["circuits"][0]
     e = c["estimate"]
-    assert c["circuit"] == "climate.zone1" and c["boiler_name"] == "Sala Plen" and e["room"] == "camera_204"
+    assert c["circuit"] == "climate.salamare1" and c["name"] == "SalaMare1" and c["boiler_name"] == "Sala Plen"
+    assert e["room"] == "camera_204"
     assert e["event_summary"] == "Ședința consiliului" and e["target"] == 22  # the event's own target wins
     assert e["t_now"] == 17.0 and e["confidence"] == "none" and e["fixed_lead_min"] == 120
     assert e["lead_min"] == round(40 + 5 * 60 / 1.5 + 15)
     await portal.log_tick()
     hist = await (await admin.get("/api/estimates/history")).json()
-    assert hist[0]["circuit"] == "climate.zone1" and hist[0]["lead_min"] == e["lead_min"]
+    assert hist[0]["circuit"] == "climate.salamare1" and hist[0]["lead_min"] == e["lead_min"]

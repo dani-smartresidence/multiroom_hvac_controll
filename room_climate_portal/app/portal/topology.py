@@ -16,17 +16,27 @@ from pathlib import Path
 CATEGORIES = ("event", "frost", "none")
 OPEN_PRESETS = ("Winter",)
 
-# The Vox Domini plant. Only circuits that exist in HA are kept, so other sites start empty and
-# fill /data/topology.json by hand.
+# The Vox Domini plant: only the first circuit of each boiler is used. Only circuits that exist in HA
+# are kept, so other sites start empty and fill /data/topology.json by hand.
 DEFAULT_BOILERS = [
-    {"id": "sala_plen", "name": "Sala Plen", "circuits": ["climate.zone1", "climate.zone1_2", "climate.zone1_3"]},
-    {"id": "parter", "name": "Parter", "circuits": ["climate.zone2", "climate.zone2_2", "climate.zone2_3"]},
-    {"id": "etaj_1", "name": "Etaj 1", "circuits": ["climate.etaj_1", "climate.etaj_1_2", "climate.etaj_1_3"]},
-    {
-        "id": "demisol",
-        "name": "Demisol",
-        "circuits": ["climate.ariston_b4bfe94a5d38_1", "climate.ariston_b4bfe94a5d38_2", "climate.ariston_b4bfe94a5d38_3"],
-    },
+    {"id": "sala_plen", "name": "Sala Plen", "circuits": ["climate.salamare1"]},
+    {"id": "parter", "name": "Parter", "circuits": ["climate.parter1"]},
+    {"id": "etaj_1", "name": "Etaj 1", "circuits": ["climate.etaj1"]},
+    {"id": "demisol", "name": "Demisol", "circuits": ["climate.demisol1"]},
+]
+# Entity ids before the boilers' first circuits were renamed in HA (0.14.0).
+RENAMED_CIRCUITS = {
+    "climate.zone1": "climate.salamare1",
+    "climate.zone2": "climate.parter1",
+    "climate.etaj_1": "climate.etaj1",
+    "climate.ariston_b4bfe94a5d38_1": "climate.demisol1",
+}
+# The three circuits per boiler seeded by 0.12.0 and 0.13.0.
+OLD_SEEDS = [
+    ["climate.zone1", "climate.zone1_2", "climate.zone1_3"],
+    ["climate.zone2", "climate.zone2_2", "climate.zone2_3"],
+    ["climate.etaj_1", "climate.etaj_1_2", "climate.etaj_1_3"],
+    ["climate.ariston_b4bfe94a5d38_1", "climate.ariston_b4bfe94a5d38_2", "climate.ariston_b4bfe94a5d38_3"],
 ]
 LINK_FIELDS = ("boiler", "circuit", "valve", "temperature", "category", "comfort")
 
@@ -93,8 +103,30 @@ class Topology:
                 self._seeded = True
             except (ValueError, KeyError, TypeError):
                 self.boilers, self._saved_rooms = [], {}
+            if self._migrate():
+                self._save()
         self.links: dict[str, RoomLink] = {}
         self._last: tuple = ({}, {}, {})
+
+    def _migrate(self) -> bool:
+        """Old seeds kept three circuits per boiler under the old entity ids: keep the first, renamed."""
+        changed = False
+        for b in self.boilers:
+            if b.circuits in OLD_SEEDS:
+                b.circuits = b.circuits[:1]
+                changed = True
+            renamed = [RENAMED_CIRCUITS.get(c, c) for c in b.circuits]
+            if renamed != b.circuits:
+                b.circuits, changed = renamed, True
+        for saved in self._saved_rooms.values():
+            if saved.get("circuit") in RENAMED_CIRCUITS:
+                saved["circuit"], changed = RENAMED_CIRCUITS[saved["circuit"]], True
+        known = set(self.circuits)
+        for rid, saved in list(self._saved_rooms.items()):
+            if saved.get("circuit") and saved["circuit"] not in known:
+                del saved["circuit"]  # a second or third circuit that is no longer used
+                changed = True
+        return changed
 
     # ------------------------------------------------------------------ boilers
     def seed_boilers(self, states: dict[str, dict]) -> None:

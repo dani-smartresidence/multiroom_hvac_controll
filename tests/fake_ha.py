@@ -51,8 +51,8 @@ class FakeHA:
             {"entity_id": "climate.receptie", "area_id": "receptie", "labels": []},
             {"entity_id": "sensor.outdoor_temperature", "area_id": None, "labels": []},
             # Heating plant: two circuits of one boiler, a valve and a temperature sensor in room 101.
-            {"entity_id": "climate.zone1", "area_id": None, "labels": []},
-            {"entity_id": "climate.zone1_2", "area_id": None, "labels": []},
+            {"entity_id": "climate.salamare1", "area_id": None, "labels": [], "name": "SalaMare1"},
+            {"entity_id": "climate.parter1", "area_id": None, "labels": [], "name": "Parter1"},
             {"entity_id": "switch.camera_101_relay", "area_id": "camera_101", "labels": []},
             {"entity_id": "sensor.camera_101_temperature", "area_id": "camera_101", "labels": []},
         ]
@@ -82,8 +82,8 @@ class FakeHA:
             "sensor.camera_204_humidity": {"entity_id": "sensor.camera_204_humidity", "state": "44", "attributes": {"device_class": "humidity", "unit_of_measurement": "%"}},
             "sensor.outdoor_temperature": {"entity_id": "sensor.outdoor_temperature", "state": "6.0", "attributes": {"unit_of_measurement": "°C"}},
             "calendar.camera_204": {"entity_id": "calendar.camera_204", "state": "off", "attributes": {}},
-            "climate.zone1": boiler_circuit("climate.zone1", 1),
-            "climate.zone1_2": boiler_circuit("climate.zone1_2", 2),
+            "climate.salamare1": boiler_circuit("climate.salamare1", 1),
+            "climate.parter1": boiler_circuit("climate.parter1", 1),
             "switch.camera_101_relay": {"entity_id": "switch.camera_101_relay", "state": "off", "attributes": {}},
             "sensor.camera_101_temperature": {"entity_id": "sensor.camera_101_temperature", "state": "17.0", "attributes": {"device_class": "temperature", "unit_of_measurement": "°C"}},
             "calendar.camera_101": {"entity_id": "calendar.camera_101", "state": "off", "attributes": {}},
