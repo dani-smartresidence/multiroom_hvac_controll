@@ -138,7 +138,7 @@ def test_setback_floor_never_lifts_far_above_the_setback_temperature():
     poisoned = RoomModel(dead_min=34, rate1=0.44)
     assert setback_floor(poisoned, 21.0, None, 10.0, 6.0) == 18.72  # what the add-on did
     assert setback_floor(poisoned, 21.0, None, 10.0, 6.0, 16.0) == 17.0  # capped at setback + 1.0
-    healthy = RoomModel(dead_min=34, rate1=0.87)  # the same hall with its fans running
+    healthy = RoomModel(dead_min=34, rate1=0.87)  # the rate its preheat ramps measured
     assert setback_floor(healthy, 21.0, None, 10.0, 6.0, 16.0) == pytest.approx(16.49, abs=0.01)
     assert setback_floor(poisoned, 21.0, None, 17.5, 6.0, 16.0) == 17.5  # frost still wins
 
