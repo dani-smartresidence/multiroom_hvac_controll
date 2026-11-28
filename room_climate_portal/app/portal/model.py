@@ -6,8 +6,9 @@ From the measured heat runs (sessions.py) each room on a circuit gets a model:
 * heating rate with the circuit alone on its boiler (°C/h). A run made while ``n`` circuits shared
   the boiler is scaled up by ``1 + SHARE_K * (n - 1)``; with five runs or more over at least
   OUTDOOR_SPREAD_C of outdoor temperatures the rate also follows the outdoor temperature (least squares).
-  Runs below MIN_LEARN_RATE are dropped: a room that gains almost nothing per hour while its circuit is
-  open was sitting at equilibrium or blocked, and says nothing about how fast it can be heated,
+  Runs opened for a setback floor or frost protection are dropped, and so are runs logged before the
+  reason was saved that gained less than MIN_LEARN_RATE (most of those were setback holds). A slow run
+  opened for a preheat, an event or a test is kept: that is how fast the room really heated,
 * tau: median time constant from cool runs, used to predict how far the room cools until the start.
 
 lead = dead time + (target - temperature at start) / (rate x share) + MARGIN_MIN
@@ -32,7 +33,7 @@ MAX_LEAD_MIN = 720.0
 MIN_RUN_MIN = 30
 OUTDOOR_FIT_RUNS = 5
 OUTDOOR_SPREAD_C = 4.0
-MIN_LEARN_RATE = 0.25  # °C/h: a run this slow was holding a floor or blocked, not ramping
+MIN_LEARN_RATE = 0.25  # °C/h: old runs logged without a reason this slow were most likely setback holds
 MAX_FLOOR_LIFT = 1.0  # °C above the setback temperature a computed floor may ever sit
 
 
@@ -97,7 +98,7 @@ def fit_models(sessions: list[dict]) -> tuple[dict[tuple[str, str], RoomModel], 
         s for s in sessions
         if s["kind"] == "heat" and s.get("room") and s.get("rate_c_per_h") and s["rate_c_per_h"] > 0
         and s.get("reason") not in LEARN_SKIP_REASONS
-        and s["rate_c_per_h"] * (1 + SHARE_K * ((s.get("n_open_avg") or 1) - 1)) >= MIN_LEARN_RATE
+        and (s.get("reason") or s["rate_c_per_h"] * (1 + SHARE_K * ((s.get("n_open_avg") or 1) - 1)) >= MIN_LEARN_RATE)
         and s.get("dead_time_min") is not None and s["end"] - s["start"] >= MIN_RUN_MIN * 60
     ]
     by_room: dict[tuple[str, str], list[dict]] = {}

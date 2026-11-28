@@ -152,6 +152,13 @@ def test_fit_skips_holding_runs_and_blocked_delivery():
     assert fit_models([run(0.9, reason="preheat")])[0][("c1", "r1")].runs == 1
 
 
+def test_fit_keeps_slow_runs_that_were_real_ramps():
+    """The 0.25 °C/h floor only cleans rows logged without a reason. A preheat that heated slowly
+    (28.11.2026: 0.13 °C/h from 11:05 to 13:50) is how the room really behaves and must be learned."""
+    m = fit_models([run(0.13, reason="preheat"), run(0.11), run(0.20, reason="event")])[0][("c1", "r1")]
+    assert m.runs == 2 and m.rate1 == pytest.approx(0.165)
+
+
 def test_plan_uses_forecast_and_lists_rooms():
     models = ({}, {"c1": RoomModel(dead_min=30, rate1=1.0, slope=0.1, ref_outdoor=5.0, lo=0.2, hi=5, runs=6, source="circuit")}, {})
     plans = [CircuitPlan("c1", "b1", [cand("a", 10, 12), cand("b", 20, 22)])]

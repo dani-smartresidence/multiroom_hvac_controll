@@ -28,6 +28,7 @@ from .topology import RENAMED_CIRCUITS, Topology, is_circuit_open, is_valve_open
 _LOGGER = logging.getLogger(__name__)
 
 SCHEDULE_REFRESH_S = 300
+UNREADABLE = ("unavailable", "unknown")  # calendar states in which get_events has nothing to say
 DATALOG_INTERVAL_S = 60
 PRUNE_INTERVAL_S = 86400
 MODEL_SESSIONS = 5000
@@ -906,7 +907,13 @@ class Portal:
         async with self._schedule_locks[room_id]:
             now = datetime.now(self.tz)
             raw: list[dict] = []
+            # A calendar that can't be read right now (unavailable while its integration reloads, or a failed
+            # call) keeps the room's last schedule: an empty one would end preheats and close circuits.
+            known = room_id in self.schedules
             if room.calendar:
+                state = (self.states.get(room.calendar) or {}).get("state")
+                if known and state in UNREADABLE:
+                    return
                 end = now + timedelta(days=self.options.schedule_days)
                 try:
                     resp = await self.ha.call_service(
@@ -916,10 +923,16 @@ class Portal:
                         entity_id=room.calendar,
                         return_response=True,
                     )
-                    raw = ((resp or {}).get(room.calendar) or {}).get("events") or []
                 except HAError as err:
-                    _LOGGER.warning("Cannot read %s: %s", room.calendar, err)
-                    raw = []
+                    _LOGGER.warning("Cannot read %s: %s%s", room.calendar, err, "; keeping its last schedule" if known else "")
+                    if known:
+                        return
+                    resp = None
+                answer = (resp or {}).get(room.calendar)
+                if answer is None and known:
+                    _LOGGER.warning("No answer from %s; keeping its last schedule", room.calendar)
+                    return
+                raw = (answer or {}).get("events") or []
             self.schedules[room_id] = build_events(
                 raw,
                 lead_minutes=self.lead_minutes(room),

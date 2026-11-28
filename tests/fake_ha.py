@@ -93,6 +93,7 @@ class FakeHA:
         }
         n = now
         self.states["climate.camera_101_trv"]["attributes"].update(preset_modes=["none", "home", "away", "eco", "comfort"], preset_mode="none")
+        self.failing_calendars: set[str] = set()  # get_events on these fails, as on a broken connection
         self.calendars = {
             "calendar.camera_204": [
                 {"summary": "Ședința consiliului", "start": (n + timedelta(minutes=29)).replace(second=0, microsecond=0).isoformat(),
@@ -188,6 +189,9 @@ class FakeHA:
             target = (msg.get("target") or {}).get("entity_id")
             data = msg.get("service_data") or {}
             if dom == "calendar" and svc == "get_events":
+                # Like HA: an unavailable entity matches no entity, so a call asking for a response fails.
+                if target in self.failing_calendars or (self.states.get(target) or {}).get("state") == "unavailable":
+                    return await err("service_validation_error", "Service call requested response data but did not match any entities")
                 start = datetime.fromisoformat(data["start_date_time"])
                 end = datetime.fromisoformat(data["end_date_time"])
                 evs = []

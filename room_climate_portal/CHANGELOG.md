@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.18.1
+- **Un calendar care nu poate fi citit nu mai oprește încălzirea.** Pe 28.11 la 13:50, un calendar reîncărcat a fost
+  `unavailable` o secundă; add-on-ul l-a citit exact atunci, n-a găsit niciun eveniment, a încheiat preîncălzirea și
+  a închis circuitul 10 minute. Acum, cât timp calendarul e `unavailable`/`unknown` sau citirea dă eroare, camera își
+  păstrează ultimul program citit. Un calendar citit și gol rămâne gol.
+- **O preîncălzire lentă e învățată.** Pragul de 0,25 °C/h se aplică doar rulărilor vechi, salvate fără motiv. O
+  rulare deschisă pentru preîncălzire, eveniment sau test arată cât de repede se încălzește camera cu adevărat, chiar
+  dacă e lentă (28.11: 0,13 °C/h între 11:05 și 13:50).
+
 ## 0.18.0
 - **Pagina de administrare se actualizează singură**, la fiecare 10 secunde pe Camere și Instalație și la 30 de
   secunde pe Jurnal încălzire, doar pe tab-ul deschis și doar cât e vizibilă. Când revii la tab, se actualizează

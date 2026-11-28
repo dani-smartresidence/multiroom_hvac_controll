@@ -768,3 +768,24 @@ async def test_late_preheat_is_reported_once(env):
     assert len(late) == 1 and "Camera 204" in late[0]["message"]
     await portal.log_tick()
     assert len([n for n in fake.notifications if n.get("title") == "Preîncălzirea întârzie"]) == 1
+
+
+async def test_unreadable_calendar_keeps_the_schedule(env):
+    """28.11.2026: a calendar reload made calendar.p07_sala_plen unavailable for a second; the add-on read
+    it then, got no events, ended the preheat and closed the circuit for 10 minutes."""
+    fake, portal, _, _ = env
+    before = list(portal.schedules["camera_204"])
+    assert before
+    await fake.set_state("calendar.camera_204", "unavailable", {})
+    await asyncio.sleep(0.2)  # the state change asks for a refresh
+    await portal.refresh_schedule("camera_204")
+    assert portal.schedules["camera_204"] == before
+    await fake.set_state("calendar.camera_204", "off", {})
+    await asyncio.sleep(0.2)
+    fake.failing_calendars.add("calendar.camera_204")  # available, but the read fails
+    await portal.refresh_schedule("camera_204")
+    assert portal.schedules["camera_204"] == before
+    fake.failing_calendars.clear()
+    fake.calendars["calendar.camera_204"] = []  # readable and really empty now: that is applied
+    await portal.refresh_schedule("camera_204")
+    assert portal.schedules["camera_204"] == []
