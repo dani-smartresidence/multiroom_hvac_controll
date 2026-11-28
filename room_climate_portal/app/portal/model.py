@@ -5,7 +5,9 @@ From the measured heat runs (sessions.py) each room on a circuit gets a model:
 * dead time: median minutes until the room starts warming,
 * heating rate with the circuit alone on its boiler (°C/h). A run made while ``n`` circuits shared
   the boiler is scaled up by ``1 + SHARE_K * (n - 1)``; with five runs or more over at least
-  OUTDOOR_SPREAD_C of outdoor temperatures the rate also follows the outdoor temperature (least squares),
+  OUTDOOR_SPREAD_C of outdoor temperatures the rate also follows the outdoor temperature (least squares).
+  Runs below MIN_LEARN_RATE are dropped: a room that gains almost nothing per hour while its circuit is
+  open was sitting at equilibrium or blocked, and says nothing about how fast it can be heated,
 * tau: median time constant from cool runs, used to predict how far the room cools until the start.
 
 lead = dead time + (target - temperature at start) / (rate x share) + MARGIN_MIN
@@ -30,6 +32,8 @@ MAX_LEAD_MIN = 720.0
 MIN_RUN_MIN = 30
 OUTDOOR_FIT_RUNS = 5
 OUTDOOR_SPREAD_C = 4.0
+MIN_LEARN_RATE = 0.25  # °C/h: a run this slow was holding a floor or blocked, not ramping
+MAX_FLOOR_LIFT = 1.0  # °C above the setback temperature a computed floor may ever sit
 
 
 def share_factor(n_open: int | float | None) -> float:
@@ -84,11 +88,16 @@ def _fit(rows: list[dict], source: str) -> RoomModel:
     return m
 
 
+LEARN_SKIP_REASONS = ("setback", "frost")  # holding runs: they say nothing about how fast a room heats
+
+
 def fit_models(sessions: list[dict]) -> tuple[dict[tuple[str, str], RoomModel], dict[str, RoomModel], dict[str, float]]:
     """Room models keyed (circuit, room), circuit-wide models, and tau (hours) per room."""
     heat = [
         s for s in sessions
         if s["kind"] == "heat" and s.get("room") and s.get("rate_c_per_h") and s["rate_c_per_h"] > 0
+        and s.get("reason") not in LEARN_SKIP_REASONS
+        and s["rate_c_per_h"] * (1 + SHARE_K * ((s.get("n_open_avg") or 1) - 1)) >= MIN_LEARN_RATE
         and s.get("dead_time_min") is not None and s["end"] - s["start"] >= MIN_RUN_MIN * 60
     ]
     by_room: dict[tuple[str, str], list[dict]] = {}
@@ -161,10 +170,20 @@ def coast_minutes(t_room: float | None, outdoor: float | None, tau_h: float | No
     return round(min(max_min, hours * 60), 1)
 
 
-def setback_floor(m: RoomModel, target: float, outdoor: float | None, frost: float, max_preheat_h: float) -> float:
-    """Lowest temperature the room may fall to so that preheating never needs more than ``max_preheat_h``."""
+def setback_floor(m: RoomModel, target: float, outdoor: float | None, frost: float, max_preheat_h: float,
+                  setback_temp: float | None = None) -> float:
+    """Lowest temperature the room may fall to so that preheating never needs more than ``max_preheat_h``.
+
+    A floor never sits more than MAX_FLOOR_LIFT above ``setback_temp``. A model that asks for more is
+    saying the event is out of reach, which is a reason to warn, not to hold the room near comfort for
+    hours: on 28.11.2026 a learned 0.44 °C/h put the floor of a 21.0 °C event at 18.7 °C, above the
+    temperature the hall settled at, so the demand never cleared and the boiler burned 83 kWh overnight.
+    """
     heat_h = max(0.0, max_preheat_h - (m.dead_min + MARGIN_MIN) / 60)
-    return round(max(frost, target - m.rate_at(outdoor) * heat_h), 2)
+    floor = target - m.rate_at(outdoor) * heat_h
+    if setback_temp is not None:
+        floor = min(floor, setback_temp + MAX_FLOOR_LIFT)
+    return round(max(frost, floor), 2)
 
 
 OutdoorAt = Callable[[int, int], "float | None"]

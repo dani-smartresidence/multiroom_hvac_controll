@@ -113,6 +113,7 @@ class Run:
     n_hist: list[tuple[int, int]] = field(default_factory=list)
     end: int | None = None
     end_reason: str | None = None
+    reason: str | None = None  # why the circuit opened: preheat | event | setback | frost | test_a ...
     rooms: list[tuple[str, float | None]] = field(default_factory=list)  # (room_id, comfort target)
 
 
@@ -126,8 +127,9 @@ class SessionTracker:
         self._known: dict[str, bool] = {}
         self._done: list[Run] = []
 
-    def observe(self, circuit: str, is_open: bool, ts: int, n_open: int) -> None:
-        """A circuit's state as seen now; ``n_open`` counts the open circuits of its boiler."""
+    def observe(self, circuit: str, is_open: bool, ts: int, n_open: int, reason: str | None = None) -> None:
+        """A circuit's state as seen now; ``n_open`` counts the open circuits of its boiler.
+        ``reason`` is the decision that opened it, so the model can tell a ramp from a setback hold."""
         boiler = self.topology.boiler_of_circuit(circuit)
         bid = boiler.id if boiler else None
         for run in self.runs.values():
@@ -141,7 +143,8 @@ class SessionTracker:
         if current and current.kind != "skip":
             current.end, current.end_reason = ts, ("closed" if not is_open else "opened")
             self._close(current)
-        self.runs[circuit] = Run("heat" if is_open else "cool", circuit, bid, ts, [(ts, n_open)] if is_open else [])
+        self.runs[circuit] = Run("heat" if is_open else "cool", circuit, bid, ts, [(ts, n_open)] if is_open else [],
+                                 reason=reason if is_open else None)
 
     def take_done(self, now: int) -> list[Run]:
         """Finished runs (also cutting heat runs longer than MAX_HEAT_S), ready for finalize()."""
@@ -175,7 +178,8 @@ class SessionTracker:
             n_max, n_avg = _n_open(run.n_hist, end)
             base = {
                 "kind": run.kind, "boiler": run.boiler, "circuit": run.circuit, "start": run.start, "end": end,
-                "end_reason": run.end_reason, "outdoor": outdoor, "n_open_max": n_max, "n_open_avg": n_avg,
+                "end_reason": run.end_reason, "reason": run.reason,
+                "outdoor": outdoor, "n_open_max": n_max, "n_open_avg": n_avg,
                 "note": self.note_for(run.circuit, run.start, end) if self.note_for else None,
             }
             for room_id, target in run.rooms or [(None, None)]:

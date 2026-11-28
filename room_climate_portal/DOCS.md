@@ -261,9 +261,15 @@ dar nu mai devreme de `max_coast_minutes` (45). O cameră care e deja cu 1 °C s
 continuare.
 
 **Temperatura minimă de așteptare (setback dinamic).** Înaintea unui eveniment din următoarele
-`setback_horizon_hours` (24 h), fiecare cameră e ținută peste un minim: cea mai mică temperatură din
+`setback_horizon_hours` (8 h), fiecare cameră e ținută peste un minim: cea mai mică temperatură din
 care preîncălzirea încă încape în `max_preheat_hours` (6 h), după timpul mort și viteza învățate (și
-prognoză). Mai departe de un eveniment se aplică doar antiîngheț-ul, deci camera se poate răci cât vrea.
+prognoză). Minimul nu urcă niciodată cu mai mult de 1 °C peste `setback_temp`: dacă modelul cere mai mult,
+evenimentul nu încape oricum în `max_preheat_hours`, iar ținerea camerei aproape de confort ore în șir
+doar arde gaz. Mai departe de un eveniment se aplică doar antiîngheț-ul, deci camera se poate răci cât vrea.
+
+Viteza de încălzire se învață doar din rulările de preîncălzire, eveniment și test: o rulare în care
+circuitul a ținut camera la minim sau la antiîngheț nu e o rampă și nu intră în model. Nici rulările sub
+0,25 °C/h (cele vechi, de dinainte ca motivul deschiderii să fie salvat).
 Cardul din Comanda încălzirii arată minimul fiecărei camere.
 
 **La timp sau întârziat.** În timpul preîncălzirii, add-on-ul calculează când ajunge camera la țintă din
