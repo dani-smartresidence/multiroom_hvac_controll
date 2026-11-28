@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.17.1
+- **Minimul de așteptare nu mai ține sala caldă toată noaptea.** Pe 28.11, sala plen a ars 83 kWh între 00:35 și
+  06:05 pentru un eveniment de la 17:00: rulările în care circuitul ținea camera la minim au fost învățate ca rampe
+  (0,11 și 0,44 °C/h), viteza a scăzut la 0,44 °C/h, iar minimul a ajuns la 18,7 °C, peste temperatura la care sala
+  s-a stabilizat. Cererea nu se putea stinge, deci centrala a mers mai departe.
+- Viteza de încălzire se învață doar din preîncălzire, eveniment și test, nu din rulările de minim sau antiîngheț;
+  rulările vechi sub 0,25 °C/h sunt ignorate.
+- Minimul de așteptare nu mai urcă cu mai mult de 1 °C peste `setback_temp`.
+- `setback_horizon_hours` implicit 24 → 8 h. **Instalațiile existente păstrează valoarea salvată**: schimbați-o din
+  configurația add-on-ului.
+
 ## 0.17.0
 - **Totul în română**: pagina de administrare (tab-urile Camere, Instalație și Jurnal încălzire), foaia de printare,
   mesajele de eroare, notificările, numele senzorilor publicați în HA, blueprint-ul watchdog, documentația și
