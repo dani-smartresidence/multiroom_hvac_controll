@@ -38,11 +38,12 @@ var LOG_Q = "";
     var h = haystack(r);
     return words.every(function (w) { return h.indexOf(w) !== -1; });
   }
-  function renderRooms() {
+  // ``force``: id of a room whose row must be redrawn even while in use (it was just saved or reset).
+  function renderRooms(force) {
     var words = fold($("#q").value).split(/\s+/).filter(Boolean);
     var shown = ROOMS.filter(function (r) { return matches(r, words); });
-    $("#rooms tbody").innerHTML = shown.map(row).join("") ||
-      '<tr class="nomatch"><td colspan="7">Nicio cameră nu se potrivește. <button type="button" class="small" id="clear">Șterge căutarea</button></td></tr>';
+    Live.list($("#rooms tbody"), shown.map(row).join("") ||
+      '<tr class="nomatch"><td colspan="7">Nicio cameră nu se potrivește. <button type="button" class="small" id="clear">Șterge căutarea</button></td></tr>', force);
     var ps = $("#print-shown");
     ps.hidden = !shown.length || shown.length === ROOMS.length;
     ps.textContent = "Printează afișate (" + shown.length + ")";
@@ -52,7 +53,7 @@ var LOG_Q = "";
       var f = b.getAttribute("data-f");
       b.classList.toggle("on", f === FILTER);
       var n = ROOMS.filter(TESTS[f]).length;
-      b.innerHTML = esc(b.getAttribute("data-label") || b.textContent) + (f === "all" ? "" : "<b>" + n + "</b>");
+      Live.html(b, esc(b.getAttribute("data-label") || b.textContent) + (f === "all" ? "" : "<b>" + n + "</b>"));
     });
     var ids = {};
     shown.forEach(function (r) { ids[r.id] = 1; });
@@ -146,7 +147,7 @@ var LOG_Q = "";
   function roomById(id) { return ROOMS.filter(function (r) { return r.id === id; })[0]; }
   function replaceRoom(updated) {
     ROOMS = ROOMS.map(function (r) { return r.id === updated.id ? updated : r; });
-    renderRooms();
+    renderRooms(updated.id);
   }
   function flash(msg) {
     var el = $("#flash");
@@ -181,7 +182,7 @@ var LOG_Q = "";
         flash(row.name + ": ținta e acum " + num(value) + " °C");
       }).catch(function (e) {
         delete PENDING[id];
-        renderRooms();
+        renderRooms(id);
         flash(r.name + ": " + e.message);
       });
     }, 700);
@@ -192,14 +193,14 @@ var LOG_Q = "";
       var lid = li.getAttribute("data-lead"), lr = roomById(lid), raw = li.value.trim();
       var mins = Number(raw);
       if (raw === "" || !Number.isInteger(mins) || mins < 0 || mins > 600) {
-        renderRooms();
+        renderRooms(lid);
         return flash((lr ? lr.name : lid) + ": preîncălzirea trebuie să fie între 0 și 600 de minute întregi");
       }
       li.disabled = true;
       return sendRoom(lid, "lead_time", { lead_minutes: mins }).then(function (row) {
         replaceRoom(row);
         flash(row.name + ": încălzirea pornește cu " + mins + " min înainte de evenimente");
-      }).catch(function (e) { renderRooms(); flash((lr ? lr.name : lid) + ": " + e.message); });
+      }).catch(function (e) { renderRooms(lid); flash((lr ? lr.name : lid) + ": " + e.message); });
     }
     var vo = ev.target.closest("input[data-vo]");
     if (vo) {
@@ -208,7 +209,7 @@ var LOG_Q = "";
       return sendRoom(vid, "view_only", { view_only: want }).then(function (row) {
         replaceRoom(row);
         flash(row.name + (want ? ": doar vizualizare" : ": oaspeții pot modifica din nou"));
-      }).catch(function (e) { renderRooms(); flash(e.message); });
+      }).catch(function (e) { renderRooms(vid); flash(e.message); });
     }
     var ps = ev.target.closest("select[data-preset]");
     if (ps) {
@@ -218,7 +219,7 @@ var LOG_Q = "";
         replaceRoom(row);
         flash(row.name + ": preset " + presetLabel(preset));
       }).catch(function (e) {
-        renderRooms();
+        renderRooms(pid);
         flash((pr ? pr.name : pid) + ": " + e.message);
       });
     }
@@ -230,7 +231,7 @@ var LOG_Q = "";
       replaceRoom(row);
       flash(row.name + ": mod " + (MODE_LABEL[mode] || mode));
     }).catch(function (e) {
-      renderRooms();
+      renderRooms(id);
       flash((r ? r.name : id) + ": " + e.message);
     });
   });
@@ -256,7 +257,7 @@ var LOG_Q = "";
     var ev = r.next_event;
     var open = OPEN[r.id];
     var cls = (open ? "open " : "") + (isHeating(r) ? "heating" : "");
-    return "<tr data-id=\"" + esc(r.id) + "\"" + (cls.trim() ? ' class="' + cls.trim() + '"' : "") + ">" +
+    return "<tr data-id=\"" + esc(r.id) + "\" data-key=\"" + esc(r.id) + "\"" + (cls.trim() ? ' class="' + cls.trim() + '"' : "") + ">" +
       "<td class=\"c-room\"><div class=\"rhead\"><div><b class=\"rname\">" + esc(r.name) + (isHeating(r) ? ' <span class="flame" title="Încălzește">' + FLAME + "</span>" : "") + "</b><div class=\"muted\">" + esc(r.subtitle) +
         '<span class="m-only"> · ' + (r.pin_enabled ? "cu PIN" : "fără PIN") + "</span>" + (r.view_only ? ' <span class="vo-tag">🔒 Doar vizualizare</span>' : "") + "</div><div class=\"mono muted d-only\">" + esc(r.id) + "</div></div>" +
         '<button type="button" class="more m-only" data-more="' + esc(r.id) + '" aria-expanded="' + (open ? "true" : "false") + '">' + (open ? "Mai puțin ▴" : "Detalii ▾") + "</button></div>" +
@@ -281,13 +282,13 @@ var LOG_Q = "";
   }
 
   function load() {
-    fetch("api/status").then(function (r) { return r.json(); }).then(function (s) {
+    return fetch("api/status").then(function (r) { return r.json(); }).then(function (s) {
       TZ = s.time_zone || undefined;
-      $("#status").innerHTML = '<span class="dot ' + (s.ha_connected ? "on" : "") + '"></span>' +
+      Live.html($("#status"), '<span class="dot ' + (s.ha_connected ? "on" : "") + '"></span>' +
         (s.ha_connected ? "Conectat la Home Assistant" : "Neconectat la Home Assistant") +
-        " · URL public <code>" + esc(s.public_url) + "</code> · etichetă <code>" + esc(s.room_label) + "</code> · " + esc(s.time_zone);
+        " · URL public <code>" + esc(s.public_url) + "</code> · etichetă <code>" + esc(s.room_label) + "</code> · " + esc(s.time_zone));
       $("#label").textContent = s.room_label;
-      loadRest();
+      return loadRest();
     }).catch(loadRest);
   }
 
@@ -299,10 +300,7 @@ var LOG_Q = "";
       var h = fold([a.room, a.action, a.client].join(" "));
       return words.every(function (w) { return h.indexOf(w) !== -1; });
     });
-    $("#audit tbody").innerHTML = shown.map(function (a) {
-      var change = changeText(a);
-      return "<tr data-room=\"" + esc(a.room) + "\"><td class=\"a-time\">" + when(a.ts) + "</td><td class=\"a-room\">" + esc(a.room) + "</td><td class=\"a-change\">" + change + "</td><td class=\"mono a-client\">" + esc(a.client) + "</td></tr>";
-    }).join("") || '<tr><td colspan="4" class="muted">Nicio modificare încă.</td></tr>';
+    Live.list($("#audit tbody"), shown.map(auditRow).join("") || '<tr><td colspan="4" class="muted">Nicio modificare încă.</td></tr>');
     renderRooms();
   }
 
@@ -370,21 +368,25 @@ var LOG_Q = "";
   });
 
   function loadRest() {
-    fetch("api/rooms").then(function (r) { return r.json(); }).then(function (rooms) {
-      ROOMS = rooms;
-      if (!TESTS[FILTER]) FILTER = "all";
-      renderRooms();
-      $("#empty").hidden = rooms.length > 0;
-      $("#rooms").hidden = rooms.length === 0;
-      $("#filters").hidden = rooms.length === 0;
-    });
-    fetch("api/audit?limit=50").then(function (r) { return r.json(); }).then(function (rows) {
-      $("#audit tbody").innerHTML = rows.map(function (a) {
-        var change = changeText(a);
-        return "<tr data-room=\"" + esc(a.room) + "\"><td class=\"a-time\">" + when(a.ts) + "</td><td class=\"a-room\">" + esc(a.room) + "</td><td class=\"a-change\">" + change + "</td><td class=\"mono a-client\">" + esc(a.client) + "</td></tr>";
-      }).join("") || '<tr><td colspan="4" class="muted">Nicio modificare încă.</td></tr>';
-      renderRooms();
-    });
+    return Promise.all([
+      fetch("api/rooms").then(function (r) { return r.json(); }).then(function (rooms) {
+        ROOMS = rooms;
+        if (!TESTS[FILTER]) FILTER = "all";
+        renderRooms();
+        $("#empty").hidden = rooms.length > 0;
+        $("#rooms").hidden = rooms.length === 0;
+        $("#filters").hidden = rooms.length === 0;
+      }),
+      fetch("api/audit?limit=50").then(function (r) { return r.json(); }).then(function (rows) {
+        LOGS = rows;
+        Live.list($("#audit tbody"), rows.map(auditRow).join("") || '<tr><td colspan="4" class="muted">Nicio modificare încă.</td></tr>');
+        renderRooms();
+      })
+    ]);
+  }
+  function auditRow(a) {
+    return "<tr data-key=\"" + esc(a.ts + "|" + a.room + "|" + a.action) + "\" data-room=\"" + esc(a.room) + "\"><td class=\"a-time\">" + when(a.ts) +
+      "</td><td class=\"a-room\">" + esc(a.room) + "</td><td class=\"a-change\">" + changeText(a) + "</td><td class=\"mono a-client\">" + esc(a.client) + "</td></tr>";
   }
 
   // In-page dialog. Browser prompt()/confirm() are blocked inside the HA Ingress
@@ -448,7 +450,7 @@ var LOG_Q = "";
       return sendRoom(lrid, "lead_time", { lead_minutes: null }).then(function (row) {
         replaceRoom(row);
         flash(row.name + ": preîncălzirea revine la " + row.lead_minutes + " min (valoarea comună)");
-      }).catch(function (e) { renderRooms(); flash(e.message); });
+      }).catch(function (e) { renderRooms(lrid); flash(e.message); });
     }
     var tb = ev.target.closest("button[data-temp]");
     if (tb) return stepTemp(tb.getAttribute("data-temp"), parseInt(tb.getAttribute("data-dir"), 10));
@@ -578,9 +580,5 @@ var LOG_Q = "";
     ro.observe($("#filters"));
   }
   measureSticky();
-  setInterval(function () {
-    var a = document.activeElement;
-    if (a && a.matches && a.matches("select.mode, input.lead-in")) return;  // also preset menus  // don't close an open mode menu
-    load();
-  }, 30000);
+  Live.every(10000, load, function () { return !$("#view-rooms").hidden; });
 })();

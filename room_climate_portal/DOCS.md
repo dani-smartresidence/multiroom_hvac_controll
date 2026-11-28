@@ -9,6 +9,11 @@ Pagina de administrare se deschide din bara laterală HA, la **Încălzire camer
 **Camere** (coduri QR, PIN-uri, termostate), **Instalație** (centrale, circuite, estimări, comanda
 încălzirii) și **Jurnal încălzire** (rulări măsurate, estimat față de realitate).
 
+Pagina se actualizează singură: tab-ul deschis se reîncarcă la fiecare 10 secunde (Jurnal încălzire la 30),
+cât timp pagina e vizibilă, și imediat când revii la ea. Se redesenează doar rândurile și cardurile care s-au
+schimbat, cu o evidențiere scurtă. Un rând pe care îl modifici (un câmp atins în ultimele 15 secunde sau o
+valoare scrisă și nesalvată) așteaptă până termini.
+
 ## 1. Pregătește Home Assistant (o dată pentru fiecare cameră)
 
 | Ce | Cum |
