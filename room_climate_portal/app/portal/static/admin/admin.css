@@ -171,7 +171,10 @@ select.mode{margin-top:6px;font:inherit;font-size:12px;padding:5px 8px;border-ra
   #rooms tr.heating td,#rooms tr.heating td.c-temp{background:transparent}
   #rooms tr.heating td:first-child{box-shadow:none}
 }
-@media (prefers-reduced-motion:reduce){.heat-badge svg,.flame svg,#rooms tr.heating{animation:none}}
+/* A row or section that a live update just changed fades in from a light tint. */
+@keyframes liveFlash{from{background-color:color-mix(in srgb,var(--accent) 22%,transparent)}}
+tr.live-changed>td,.live-changed:not(tr){animation:liveFlash 1.8s ease-out}
+@media (prefers-reduced-motion:reduce){.heat-badge svg,.flame svg,#rooms tr.heating,tr.live-changed>td,.live-changed:not(tr){animation:none}}
 
 .vo{display:flex;align-items:center;gap:6px;margin:4px 0 6px;font-size:12px;font-weight:600;flex-wrap:wrap}
 .switch{position:relative;display:inline-block;width:34px;height:20px;flex:none}

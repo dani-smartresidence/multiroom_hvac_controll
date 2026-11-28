@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.18.0
+- **Pagina de administrare se actualizează singură**, la fiecare 10 secunde pe Camere și Instalație și la 30 de
+  secunde pe Jurnal încălzire, doar pe tab-ul deschis și doar cât e vizibilă. Când revii la tab, se actualizează
+  imediat.
+- **Se redesenează doar ce s-a schimbat**: rândurile și cardurile sunt comparate unul câte unul, iar cele modificate
+  se evidențiază scurt. Restul paginii nu se atinge, deci derularea, meniurile și graficele deschise rămân.
+- Un rând nu se actualizează cât timp îl folosești: un câmp atins în ultimele 15 secunde sau o valoare scrisă și
+  nesalvată (o notă, o preîncălzire, automatizările bifate). După salvare se actualizează imediat.
+- Rezolvat: actualizarea automată se oprea definitiv după ce schimbai un mod sau o preîncălzire (focusul rămânea pe
+  câmp), iar cardurile din Comanda încălzirii nu se mai actualizau după primul clic pe un buton din ele.
+- Rezolvat: filtrul din Ultimele modificări nu găsea nimic.
+
 ## 0.17.1
 - **Minimul de așteptare nu mai ține sala caldă toată noaptea.** Pe 28.11, sala plen a ars 83 kWh între 00:35 și
   06:05 pentru un eveniment de la 17:00: rulările în care circuitul ținea camera la minim au fost învățate ca rampe

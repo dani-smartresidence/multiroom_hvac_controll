@@ -201,8 +201,11 @@ async def test_assets_are_versioned(env):
     _, _, guest, admin = env
     html = await (await admin.get("/")).text()
     assert "static/admin.js?v=" in html and "__V__" not in html
-    r = await admin.get("/static/admin.js")
-    assert r.status == 200 and r.headers["Cache-Control"] == "no-cache"
+    # live.js defines Live, which admin.js and plant.js use as they load
+    assert html.index("static/live.js?v=") < html.index("static/admin.js?v=") < html.index("static/plant.js?v=")
+    for asset in ("admin.js", "live.js"):
+        r = await admin.get("/static/" + asset)
+        assert r.status == 200 and r.headers["Cache-Control"] == "no-cache"
     page = await (await guest.get("/camera/AAAAAAAAAAAAAAAAAAAAAA")).text()
     assert "/camera/static/app.js?v=" in page
     assert (await guest.get("/camera/static/app.js")).headers["Cache-Control"] == "no-cache"

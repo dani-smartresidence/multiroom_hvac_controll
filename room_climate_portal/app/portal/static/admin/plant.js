@@ -83,11 +83,11 @@
     return r ? r.name : id;
   }
   function circuitLabel(c) { return c.name + " · " + c.entity_id; }
-  function loadPlant() {
+  function loadPlant(forceRoom) {
     return fetch("api/plant").then(function (r) { return r.json(); }).then(function (p) {
       PLANT = p;
-      if (current() === "plant") { renderPlant(); loadEstimates(); loadControl(); }
       fillCircuitFilter();
+      if (current() === "plant") { renderPlant(forceRoom); return Promise.all([loadEstimates(), loadControl()]); }
     });
   }
 
@@ -98,15 +98,15 @@
     frost: "antiîngheț în", setback: "păstrează temperatura minimă în", coast: "oprire anticipată, evenimentul se termină în",
     test_a: "test A (încălzire) în", test_b: "test B (răcire) în", idle: "nimic de încălzit"
   };
-  function loadControl() {
+  // ``force``: id of a boiler card to redraw even while in use (an action on it just finished).
+  function loadControl(force) {
     return fetch("api/control").then(function (r) { return r.json(); }).then(function (d) {
       CONTROL = d;
       var s = d.settings;
-      $("#ctl-sub").innerHTML = "Histerezis ±" + num(s.hysteresis) + " °C · antiîngheț sub " + num(s.frost_temp) + " °C · cel mult o comutare la " +
+      Live.html($("#ctl-sub"), "Histerezis ±" + num(s.hysteresis) + " °C · antiîngheț sub " + num(s.frost_temp) + " °C · cel mult o comutare la " +
         s.min_switch_minutes + " min · se oprește mai devreme dacă camera pierde cel mult " + num(s.coast_drop) + " °C (maxim " + s.max_coast_minutes + " min) · temperatura minimă de așteptare ține preîncălzirea sub " +
-        num(s.max_preheat_hours) + " h pentru evenimentele din următoarele " + num(s.setback_horizon_hours, 0) + " h. <b>Simulare</b> arată ce ar face add-on-ul. <b>Activ</b> comută circuitul și oprește automatizările pe care le preia; blueprint-ul watchdog le repornește dacă add-on-ul se oprește (<code>" + esc(d.heartbeat) + "</code>).";
-      var focused = document.activeElement && document.activeElement.closest && document.activeElement.closest("#control");
-      if (!focused) $("#control").innerHTML = d.boilers.map(controlCard).join("");
+        num(s.max_preheat_hours) + " h pentru evenimentele din următoarele " + num(s.setback_horizon_hours, 0) + " h. <b>Simulare</b> arată ce ar face add-on-ul. <b>Activ</b> comută circuitul și oprește automatizările pe care le preia; blueprint-ul watchdog le repornește dacă add-on-ul se oprește (<code>" + esc(d.heartbeat) + "</code>).");
+      Live.list($("#control"), d.boilers.map(controlCard).join(""), force);
     });
   }
   function decisionText(c, active) {
@@ -136,7 +136,7 @@
       return '<label class="auto"><input type="checkbox" data-auto="' + esc(a.entity_id) + '"' + (b.takeover.indexOf(a.entity_id) !== -1 ? " checked" : "") +
         "> " + esc(a.name) + ' <span class="muted">' + esc(onOff(a.state)) + "</span></label>";
     }).join("");
-    return '<section class="boiler ctl" data-boiler="' + esc(b.id) + '"><h3>' + esc(b.name) +
+    return '<section class="boiler ctl" data-boiler="' + esc(b.id) + '" data-key="' + esc(b.id) + '"><h3>' + esc(b.name) +
       '<span class="mode-btns"><button type="button" class="small' + (active ? "" : " on") + '" data-mode="shadow">Simulare</button>' +
       '<button type="button" class="small' + (active ? " on danger" : "") + '" data-mode="active">Activ</button></span></h3>' +
       b.circuits.map(function (c) {
@@ -144,7 +144,7 @@
           '<span class="mono muted">' + esc(c.entity_id) + "</span></div><small>" + decisionText(c, active) + "</small>" +
           (c.last_switch ? "<small>Ultima comutare făcută de add-on: " + esc(day(c.last_switch)) + "</small>" : "") +
           "<small>" + testText(c) + ' <button type="button" class="small" data-chart="' + esc(c.entity_id) + '">Ultimele 24 h</button></small>' +
-          '<div class="chart-box" data-chart-box="' + esc(c.entity_id) + '"></div></div>';
+          '<div class="chart-box" data-chart-box="' + esc(c.entity_id) + '" data-keep="chart:' + esc(c.entity_id) + '"></div></div>';
       }).join("") +
       '<div class="circ"><span></span><div><small>Preia: ' + take + "</small>" +
       '<details' + (CTL_OPEN[b.id] ? " open" : "") + '><summary>Alege automatizările</summary><input type="search" class="auto-q" placeholder="Filtrează automatizările" aria-label="Filtrează automatizările">' +
@@ -192,7 +192,7 @@
         if (!yes) return;
         post("api/control/boilers/" + encodeURIComponent(id), { mode: mode }).then(function () {
           flash(b.name + ": " + (mode === "active" ? "add-on-ul comandă acum circuitul" : "simulare, nu se comută nimic"));
-          loadControl();
+          loadControl(id);
         }).catch(function (e) { flash(e.message); });
       });
       return;
@@ -215,13 +215,13 @@
       post("api/control/experiments/" + encodeURIComponent(run.getAttribute("data-test-run")), {
         start: start, rise: form.querySelector("[data-test-rise]").value, max_hours: form.querySelector("[data-test-max]").value,
         cool_hours: form.querySelector("[data-test-cool]").value
-      }).then(function () { flash("Test programat"); loadControl(); }).catch(function (e) { flash(e.message); });
+      }).then(function () { flash("Test programat"); loadControl(id); }).catch(function (e) { flash(e.message); });
       return;
     }
     var cancel = ev.target.closest("[data-test-cancel]");
     if (cancel) {
       post("api/control/experiments/" + encodeURIComponent(cancel.getAttribute("data-test-cancel")), { cancel: true })
-        .then(function () { flash("Test anulat"); loadControl(); }).catch(function (e) { flash(e.message); });
+        .then(function () { flash("Test anulat"); loadControl(id); }).catch(function (e) { flash(e.message); });
       return;
     }
     if (ev.target.closest("[data-save-takeover]")) {
@@ -230,7 +230,7 @@
       post("api/control/boilers/" + encodeURIComponent(id), { takeover: list }).then(function () {
         flash(b.name + ": preia " + list.length + (list.length === 1 ? " automatizare" : " automatizări"));
         CTL_OPEN[id] = false;
-        loadControl();
+        loadControl(id);
       }).catch(function (e) { flash(e.message); });
     }
   });
@@ -243,21 +243,21 @@
   function loadEstimates() {
     return fetch("api/estimates").then(function (r) { return r.json(); }).then(function (d) {
       var rows = d.circuits.filter(function (c) { return c.estimate; });
-      $("#est-sub").innerHTML = "Afară " + (d.outdoor == null ? "necunoscut (setează outdoor_sensor)" : num(d.outdoor) + " °C") +
+      Live.html($("#est-sub"), "Afară " + (d.outdoor == null ? "necunoscut (setează outdoor_sensor)" : num(d.outdoor) + " °C") +
         (d.forecast ? " · estimările folosesc prognoza pentru fiecare interval de preîncălzire" : " · fără prognoză (setează weather_entity)") +
         " · include 15 min rezervă · actualizat la " + hhmm(d.now) +
         '<br>Paginile camerelor și senzorii de preîncălzire folosesc: <span class="mode-btns" id="lead-mode">' +
         '<button type="button" class="small' + (d.lead_mode === "estimated" ? "" : " on") + '" data-lead="fixed">Timpul fix</button>' +
-        '<button type="button" class="small' + (d.lead_mode === "estimated" ? " on" : "") + '" data-lead="estimated">Ora estimată</button></span>';
+        '<button type="button" class="small' + (d.lead_mode === "estimated" ? " on" : "") + '" data-lead="estimated">Ora estimată</button></span>');
       $("#est-empty").hidden = rows.length > 0;
       $("#estimates").hidden = rows.length === 0;
-      $("#estimates tbody").innerHTML = rows.map(estimateRow).join("");
+      Live.list($("#estimates tbody"), rows.map(estimateRow).join(""));
       labelCells($("#estimates"));
       var un = $("#est-unlinked");
       un.hidden = !d.unlinked.length;
-      un.innerHTML = d.unlinked.length ? "Camere cu evenimente, dar fără circuit (fără estimare): " + d.unlinked.map(function (u) {
+      Live.html(un, d.unlinked.length ? "Camere cu evenimente, dar fără circuit (fără estimare): " + d.unlinked.map(function (u) {
         return "<b>" + esc(u.name) + "</b> " + esc(day(u.event_start));
-      }).join(" · ") : "";
+      }).join(" · ") : "");
     });
   }
   // Phones show only the next event and the estimated start; "Detalii" opens the rest of the card.
@@ -290,7 +290,7 @@
         " + " + minutes(e.margin_min) + " rezervă = <b>" + minutes(e.lead_min) + "</b>";
     var diff = e.fixed_start - e.start;
     var open = !!EST_OPEN[c.circuit];
-    return '<tr' + (open ? ' class="open"' : "") + "><td><b>" + esc(c.name) + "</b>" + (c.boiler_name && c.boiler_name !== c.name ? '<div class="muted">' + esc(c.boiler_name) + "</div>" : "") +
+    return '<tr data-key="' + esc(c.circuit) + '"' + (open ? ' class="open"' : "") + "><td><b>" + esc(c.name) + "</b>" + (c.boiler_name && c.boiler_name !== c.name ? '<div class="muted">' + esc(c.boiler_name) + "</div>" : "") +
       '<div class="mono muted">' + esc(c.circuit) + '</div><div class="muted">' + (c.open_now ? "pornit acum" : "oprit acum") + "</div></td>" +
       '<td class="est-key"><b>' + esc(e.room_name) + "</b><div>" + esc(e.event_summary) + '</div><div class="muted">' + esc(day(e.event_start)) + " · țintă " + num(e.target) + " °C</div></td>" +
       '<td class="est-key"><span class="est-start">' + hhmm(e.start) + '</span><div class="muted">' + minutes(e.lead_min) + " înainte</div>" + status + "</td>" +
@@ -303,9 +303,9 @@
       '<td class="m-more"><button type="button" class="more" data-est-more="' + esc(c.circuit) + '" aria-expanded="' + open + '">' +
       (open ? "Mai puțin ▴" : "Detalii ▾") + "</button></td></tr>";
   }
-  function renderPlant() {
-    $("#boilers").innerHTML = PLANT.boilers.map(function (b) {
-      return '<section class="boiler"><h3>' + esc(b.name) + "<span>" + b.open + " din " + b.circuits.length + " " + (b.circuits.length === 1 ? "circuit pornit" : "circuite pornite") + "</span></h3>" +
+  function renderPlant(forceRoom) {
+    Live.list($("#boilers"), PLANT.boilers.map(function (b) {
+      return '<section class="boiler" data-key="' + esc(b.id) + '"><h3>' + esc(b.name) + "<span>" + b.open + " din " + b.circuits.length + " " + (b.circuits.length === 1 ? "circuit pornit" : "circuite pornite") + "</span></h3>" +
         b.circuits.map(function (c) {
           var state = !c.available ? "indisponibil" : c.open ? "Pornit" : "Oprit";
           return '<div class="circ"><span class="dot ' + (c.open ? "on" : "") + '"></span><div><b>' + esc(circuitLabel(c)) + "</b></div>" +
@@ -313,11 +313,9 @@
             " · țintă " + num(c.target) + " °C</small>" +
             "<small>" + (c.rooms.length ? "Încălzește: " + c.rooms.map(function (id) { return esc(roomName(id)); }).join(", ") : "Nicio cameră legată încă") + "</small></div>";
         }).join("") + "</section>";
-    }).join("") || '<p class="empty">Nicio centrală. Adaugă-le în <code>/data/topology.json</code>.</p>';
+    }).join("") || '<p class="empty">Nicio centrală. Adaugă-le în <code>/data/topology.json</code>.</p>');
 
-    var focused = document.activeElement && document.activeElement.closest && document.activeElement.closest("#links");
-    if (focused) return;  // don't redraw under an open menu
-    $("#links tbody").innerHTML = PLANT.rooms.map(linkRow).join("");
+    Live.list($("#links tbody"), PLANT.rooms.map(linkRow).join(""), forceRoom);
     labelCells($("#links"));
   }
   function opt(value, label, selected) {
@@ -338,7 +336,7 @@
     var sensors = opt("", "–", !r.temperature) + sensorList.map(function (e) { return opt(e, e, e === r.temperature); }).join("");
     var cats = Object.keys(CATEGORY).map(function (k) { return opt(k, CATEGORY[k], k === r.category); }).join("");
     var issues = (r.issues || []).map(function (i) { return '<span class="issue">' + esc(ISSUE[i] || i.replace(/_/g, " ")) + "</span>"; }).join(" ");
-    return "<tr><td><b>" + esc(r.name) + '</b><div class="muted">' + esc(r.subtitle) + "</div>" + issues + "</td>" +
+    return '<tr data-key="' + esc(r.room_id) + '"><td><b>' + esc(r.name) + '</b><div class="muted">' + esc(r.subtitle) + "</div>" + issues + "</td>" +
       "<td>" + select(r, "boiler", boilers) + "</td>" +
       "<td>" + select(r, "circuit", circuits) + "</td>" +
       "<td>" + select(r, "valve", valves) + (r.valve ? '<div class="muted">' + (r.valve_open ? "deschis" : "închis") + "</div>" : "") + "</td>" +
@@ -355,8 +353,8 @@
     post("api/plant/rooms/" + encodeURIComponent(el.getAttribute("data-room")), body).then(function (p) {
       PLANT = p;
       el.blur();
-      renderPlant();
-    }).catch(function (e) { flash(roomName(el.getAttribute("data-room")) + ": " + e.message); loadPlant(); });
+      renderPlant(el.getAttribute("data-room"));
+    }).catch(function (e) { flash(roomName(el.getAttribute("data-room")) + ": " + e.message); loadPlant(el.getAttribute("data-room")); });
   });
 
   // ------------------------------------------------------------ heating log
@@ -381,8 +379,8 @@
       (PLANT ? PLANT.boilers : []).forEach(function (b) { boilerName[b.id] = b.name; });
       $("#sess-empty").hidden = rows.length > 0;
       $("#sess-count").textContent = rows.length + (rows.length === 1 ? " rând" : " rânduri");
-      $("#sessions tbody").innerHTML = rows.map(function (s) {
-        return "<tr><td>" + when(s.start) + "</td>" +
+      Live.list($("#sessions tbody"), rows.map(function (s) {
+        return '<tr data-key="' + s.id + '"><td>' + when(s.start) + "</td>" +
           '<td class="kind-' + esc(s.kind) + '">' + (s.kind === "heat" ? "Încălzire" : "Răcire") + '<div class="muted">' + esc(END[s.end_reason] || (s.end_reason || "").replace(/_/g, " ")) + "</div></td>" +
           "<td>" + esc(boilerName[s.boiler] || s.boiler || "") + '<div class="mono muted">' + esc(s.circuit) + "</div></td>" +
           "<td>" + esc(s.room ? roomName(s.room) : "–") + "</td>" +
@@ -396,25 +394,25 @@
           '<td class="mono">' + (s.tau_h == null ? "–" : num(s.tau_h) + " h") + "</td>" +
           '<td class="note"><input type="text" maxlength="200" value="' + esc(s.note || "") + '" data-session="' + s.id + '" aria-label="Notă"> <button type="button" class="small" data-save="' + s.id + '">Salvează</button>' +
           ' <button type="button" class="small" data-sess-chart="' + s.id + '" data-circuit="' + esc(s.circuit) + '" data-room="' + esc(s.room || "") + '" data-from="' + s.start + '" data-to="' + s.end + '">Grafic</button></td></tr>';
-      }).join("");
+      }).join(""));
       labelCells($("#sessions"));
     });
   }
   function loadHistory() {
     return fetch("api/estimates/history?limit=100").then(function (r) { return r.json(); }).then(function (rows) {
-      $("#est-history tbody").innerHTML = rows.map(function (h) {
+      Live.list($("#est-history tbody"), rows.map(function (h) {
         var done = h.evaluated === 1;
         var warm = done && h.t_at_event != null && h.target != null && h.t_at_event >= h.target;
         var opened = !done ? '<span class="muted">după eveniment</span>' : h.opened_at ? hhmm(h.opened_at) : '<span class="muted">nu a pornit</span>';
         var atEvent = !done ? "–" : h.t_at_event == null ? "fără date" :
           '<span class="' + (warm ? "good" : "late") + '">' + num(h.t_at_event) + " °C</span> / " + num(h.target);
-        return "<tr><td>" + esc(h.event_summary) + '<div class="muted">' + esc(day(h.event_start)) + "</div></td>" +
+        return '<tr data-key="' + esc(h.circuit + "|" + h.event_start + "|" + (h.room || "")) + '"><td>' + esc(h.event_summary) + '<div class="muted">' + esc(day(h.event_start)) + "</div></td>" +
           "<td>" + esc(h.circuit) + '<div class="muted">' + esc(roomName(h.room)) + "</div></td>" +
           "<td><b>" + hhmm(h.est_start) + '</b><div class="muted">' + minutes(h.lead_min) + " · " + esc(CONF[h.confidence] || "") + "</div></td>" +
           "<td>" + hhmm(h.event_start - h.fixed_lead_min * 60) + '<div class="muted">' + minutes(h.fixed_lead_min) + "</div></td>" +
           "<td>" + opened + "</td><td class=\"mono\">" + atEvent + "</td>" +
           "<td>" + (!done ? "–" : h.reached_at ? hhmm(h.reached_at) : '<span class="late">nu a ajuns</span>') + "</td></tr>";
-      }).join("") || '<tr><td colspan="7" class="muted">Încă nu există estimări.</td></tr>';
+      }).join("") || '<tr><td colspan="7" class="muted">Încă nu există estimări.</td></tr>');
       labelCells($("#est-history"));
     });
   }
@@ -425,7 +423,7 @@
     if (cb) {
       var tr = cb.closest("tr");
       if (tr.nextElementSibling && tr.nextElementSibling.classList.contains("chart-row")) { tr.nextElementSibling.remove(); return; }
-      tr.insertAdjacentHTML("afterend", '<tr class="chart-row"><td colspan="13"><div class="chart-box"></div></td></tr>');
+      tr.insertAdjacentHTML("afterend", '<tr class="chart-row" data-attached><td colspan="13"><div class="chart-box"></div></td></tr>');
       var from = +cb.getAttribute("data-from"), to = +cb.getAttribute("data-to");
       chart(tr.nextElementSibling.querySelector(".chart-box"), cb.getAttribute("data-circuit"), cb.getAttribute("data-room"),
         from - 3600, Math.max(to + 3600, from + 7200));
@@ -489,7 +487,6 @@
 
   fetch("api/status").then(function (r) { return r.json(); }).then(function (s) { TZ = s.time_zone || undefined; }).catch(function () {});
   show();
-  setInterval(function () {
-    if (current() === "plant") loadPlant();
-  }, 30000);
+  Live.every(10000, function () { return loadPlant(); }, function () { return current() === "plant"; });
+  Live.every(30000, function () { return loadSessions().then(loadHistory); }, function () { return current() === "sessions"; });
 })();
