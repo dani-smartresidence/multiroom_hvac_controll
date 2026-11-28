@@ -249,7 +249,8 @@ class Portal:
                 self.datalog.record(f"circuit:{ref}:target", _float(attrs.get("temperature")), ts)
                 boiler = self.topology.boiler_of_circuit(ref)
                 n_open = len(self.topology.open_circuits(boiler.id, self.states)) if boiler else int(is_open)
-                self.sessions.observe(ref, is_open, ts, n_open)
+                last = self.decisions.get(ref)
+                self.sessions.observe(ref, is_open, ts, n_open, last.reason if last else None)
             elif kind == "valve":
                 self.datalog.record(f"valve:{entity_id}", 1.0 if is_valve_open(state) else 0.0, ts)
             elif kind == "temp":
@@ -420,7 +421,7 @@ class Portal:
             if start - now <= opts.setback_horizon_hours * 3600:
                 fc = self._outdoor_at(int(start) - int(opts.max_preheat_hours * 3600), int(start))
                 floor = setback_floor(m, float(event_target(nxt, link)), fc if fc is not None else outdoor,
-                                      opts.frost_temp, opts.max_preheat_hours)
+                                      opts.frost_temp, opts.max_preheat_hours, opts.setback_temp)
         return room_need(link, temp, events, now_dt, is_open=is_open, hysteresis=opts.hysteresis,
                          frost_temp=opts.frost_temp, coast_min=coast, floor=floor)
 

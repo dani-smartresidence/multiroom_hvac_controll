@@ -11,9 +11,9 @@ NOW = 1_800_000_000
 H = 3600
 
 
-def run(rate, dead=30, n_avg=1.0, outdoor=5.0, room="r1", circuit="c1", minutes=120):
+def run(rate, dead=30, n_avg=1.0, outdoor=5.0, room="r1", circuit="c1", minutes=120, reason=None):
     return {"kind": "heat", "room": room, "circuit": circuit, "start": 0, "end": minutes * 60, "rate_c_per_h": rate,
-            "dead_time_min": dead, "n_open_avg": n_avg, "outdoor": outdoor}
+            "dead_time_min": dead, "n_open_avg": n_avg, "outdoor": outdoor, "reason": reason}
 
 
 def test_share_factor():
@@ -125,6 +125,31 @@ def test_setback_floor():
     assert setback_floor(m, 21.0, None, 10.0, 6.0) == pytest.approx(21.0 - 10.5)
     assert setback_floor(m, 21.0, None, 12.0, 6.0) == 12.0  # never below frost protection
     assert setback_floor(m, 21.0, None, 10.0, 0.5) == 21.0
+
+
+def test_setback_floor_never_lifts_far_above_the_setback_temperature():
+    """A pessimistic rate must not hold a room near comfort for hours.
+
+    Measured on 28.11.2026: holding runs taught the hall 0.44 °C/h, so the floor for a 21.0 °C event came
+    out at 18.7 °C. The hall levelled off at 18.5 °C, so the demand never cleared: 83 kWh (~30 RON) of gas
+    overnight for +0.9 °C.
+    """
+    from portal.model import setback_floor
+    poisoned = RoomModel(dead_min=34, rate1=0.44)
+    assert setback_floor(poisoned, 21.0, None, 10.0, 6.0) == 18.72  # what the add-on did
+    assert setback_floor(poisoned, 21.0, None, 10.0, 6.0, 16.0) == 17.0  # capped at setback + 1.0
+    healthy = RoomModel(dead_min=34, rate1=0.87)  # the same hall with its fans running
+    assert setback_floor(healthy, 21.0, None, 10.0, 6.0, 16.0) == pytest.approx(16.49, abs=0.01)
+    assert setback_floor(poisoned, 21.0, None, 17.5, 6.0, 16.0) == 17.5  # frost still wins
+
+
+def test_fit_skips_holding_runs_and_blocked_delivery():
+    """Setback holds and runs that gain almost nothing describe a held room, not how fast it heats."""
+    rows = [run(0.87), run(0.89), run(0.80, reason="setback"), run(0.11, minutes=260)]
+    m = fit_models(rows)[0][("c1", "r1")]
+    assert m.runs == 2 and m.rate1 == pytest.approx(0.88)
+    assert fit_models([run(0.11), run(0.2)])[0] == {}  # nothing worth learning from
+    assert fit_models([run(0.9, reason="preheat")])[0][("c1", "r1")].runs == 1
 
 
 def test_plan_uses_forecast_and_lists_rooms():
