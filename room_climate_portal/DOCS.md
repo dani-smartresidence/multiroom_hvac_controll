@@ -273,8 +273,9 @@ evenimentul nu încape oricum în `max_preheat_hours`, iar ținerea camerei apro
 doar arde gaz. Mai departe de un eveniment se aplică doar antiîngheț-ul, deci camera se poate răci cât vrea.
 
 Viteza de încălzire se învață doar din rulările de preîncălzire, eveniment și test: o rulare în care
-circuitul a ținut camera la minim sau la antiîngheț nu e o rampă și nu intră în model. Nici rulările sub
-0,25 °C/h (cele vechi, de dinainte ca motivul deschiderii să fie salvat).
+circuitul a ținut camera la minim sau la antiîngheț nu e o rampă și nu intră în model. Dintre rulările vechi,
+salvate înainte ca motivul deschiderii să fie reținut, sunt ignorate cele sub 0,25 °C/h (erau aproape toate de
+minim). O preîncălzire lentă, cu motivul salvat, intră în model: atât de repede se încălzește camera.
 Cardul din Comanda încălzirii arată minimul fiecărei camere.
 
 **La timp sau întârziat.** În timpul preîncălzirii, add-on-ul calculează când ajunge camera la țintă din
